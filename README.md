@@ -1,31 +1,25 @@
-# Debugger2
+# Debugger2 - eBPF
 
 
 
 ## Usage
 
-To compile locally run 
-
-```bash
-sudo make chisel
-make
-```
-
-To install globally run
+To compile run 
 
 ```bash
 make
-sudo make install
 ```
 
-Local usage from `debugger2/bin` directory
+To do cleanup run
 
 ```bash
-./main <cmd> <arg1> <arg2> ...
+make clean
 ```
 
-Global installation usage
+This creates an executable in `bin`.
+
+Usage from repository base:
 
 ```bash
-debugger <cmd> <arg1> <arg2> ...
+sudo bin/main <cmd> <arg1> <arg2> ...
 ```

@@ -1,112 +1,83 @@
+CC := clang
+
+OBJ := obj
+INCLUDE := include
+BIN := bin
+SRC := src
+
+# targets
+INCLUDES := $(INCLUDE) $(OBJ)
+
+SRCS := $(wildcard $(SRC)/*.cpp)
+# BPF_SRCS := $(filter %.bpf.c, $(SRCS))
+
+MAIN = main
+# SRCS := $(filter-out $(BPF_SRCS),$(FULL_SRCS))
+# OBJS := $(filter-out main.o,$(SRCS:.cpp=.o))
+OBJS := $(patsubst $(SRC)/%.cpp,$(OBJ)/%.o,$(SRCS))
+
+# tools
+CLANG ?= clang
+LLVM_STRIP ?= llvm-strip
+BPFTOOL := bpftool
+VMLINUX := $(OBJ)/vmlinux.h
+ARCH := $(shell uname -m | sed 's/x86_64/x86/' | sed 's/aarch64/arm64/' | sed 's/ppc64le/powerpc/' | sed 's/mips.*/mips/')
+
+# flags
+IFLAGS := $(patsubst %,-I%,$(INCLUDES))
+CXXFLAGS := -O3 -Wall -std=c++17
+ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
+
+# Get Clang's default includes on this system. We'll explicitly add these dirs
+# to the includes list when compiling with `-target bpf` because otherwise some
+# architecture-specific dirs will be "missing" on some architectures/distros -
+# headers such as asm/types.h, asm/byteorder.h, asm/socket.h, asm/sockios.h,
+# sys/cdefs.h etc. might be missing.
 #
-# 'make'        build executable file 'main'
-# 'make clean'  removes all .o and executable files
-#
+# Use '-idirafter': Don't interfere with include mechanics except where the
+# build would have failed anyways.
+CLANG_BPF_SYS_INCLUDES = $(shell $(CLANG) -v -E - </dev/null 2>&1 \
+	| sed -n '/<...> search starts here:/,/End of search list./{ s| \(/.*\)|-idirafter \1|p }')
 
-# local directories for build
-OBJ		:= obj
-BIN		:= bin
-SRC		:= src
-INCLUDE	:= include
-CHISEL := proc_tree.lua
-
-# define package name
-PKGNAME := debugger
-
-# installation locations
-TEMPLATEDIR := $(DESTDIR)/etc/$(PKGNAME)
-BINDIR := $(DESTDIR)/usr/bin
-CHISELDIR := $(DESTDIR)/usr/share/sysdig/chisels
-TARGET := $(DESTDIR)/usr/share/$(PKGNAME)
-
-#define template directories
-JSDIR := src/front/js_templates
-HTMLDIR := src/front/html_templates
-CSSDIR := src/front/css
-
-# define the Cpp compiler to use
-CXX = g++
-
-# define any compile-time flags
-CXXFLAGS	:= -std=c++17 -Wall -Wextra -g -D TEMPLATE_DIR="\"$(TEMPLATEDIR)\"" -D CHISEL="\"$(CHISEL)\""
-
-# define html and css templates
-HTMLTEMPLATE := exec_template.html
-CSSTEMPLATE := style.css
-
-# define html and css files of execs
-MAINHTMLFILE := index.html
-MAINCSSFILE := style.css
-
-MAIN	:= main
-SOURCEDIRS	:= $(shell find $(SRC) -type d)
-INCLUDEDIRS	:= $(shell find $(INCLUDE) -type d)
-# FIXPATH = $1
-RM = rm -f
-MD	:= mkdir -p
-CP := cp
-RMDIR := rm -r -f
-SYMLINK := ln -s
-
-INCLUDES	:= $(patsubst %,-I %, $(INCLUDEDIRS:%/=%))
-SOURCES		:= $(wildcard $(patsubst %,%/*.cpp, $(SOURCEDIRS)))#patsubst pattern,replacement,text
-OBJECTS		:= $(patsubst $(SRC)/%.cpp, $(OBJ)/%.o, $(SOURCES)) #$(SOURCES:.cpp=.o)
-
-#
-# The following part of the makefile is generic; it can be used to 
-# build any executable just by changing the definitions above and by
-# deleting dependencies appended to the file from 'make depend'
-#
-
-# OUTPUTMAIN	:= $(call FIXPATH,$(BIN)/$(MAIN))
-OUTPUTMAIN	:= $(BIN)/$(MAIN)
-
-
-all: output $(MAIN)
-	
-	@echo Executing 'all' complete!
-
-# make output directories
-output:
-	$(MD) $(OBJ) $(BIN)
-
-chisel:
-	$(CP) $(SRC)/$(CHISEL) $(CHISELDIR)
-
-# make main executable
-$(MAIN): $(OBJECTS) 
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -o $(OUTPUTMAIN) $(OBJECTS)
-	
-
-$(OBJ)/%.o : $(SRC)/%.cpp
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<  -o $@
-
+.PHONY: all
+all: $(BIN)/$(MAIN)
 
 .PHONY: clean
 clean:
-	$(RMDIR) $(OBJ)
-	$(RMDIR) $(BIN)
-# $(RM) $(OUTPUTMAIN)
-# $(RM) $(call FIXPATH,$(OBJECTS))
-	@echo Cleanup complete!
+	rm -rf $(OBJ) $(BIN)
 
-template:
-	$(MD) $(TEMPLATEDIR)
-	$(CP) $(HTMLDIR)/$(HTMLTEMPLATE) $(TEMPLATEDIR)/$(MAINHTMLFILE)
-	$(CP) $(CSSDIR)/$(CSSTEMPLATE) $(TEMPLATEDIR)/$(MAINCSSFILE)
+$(OBJ):
+	mkdir -p $(OBJ)
 
-run: all template
-	./$(OUTPUTMAIN)
-	@echo Executing 'run: all' complete!
+$(BIN):
+	mkdir -p $(BIN)
 
-install: chisel template
-	$(MD) $(TARGET)
-	$(CP) $(BIN)/$(MAIN) $(TARGET)
-	$(MD) $(BINDIR)
-	$(SYMLINK) $(TARGET)/$(MAIN) $(BINDIR)/$(PKGNAME)
-	@echo Install complete!
+$(VMLINUX): | $(OBJ)
+	$(BPFTOOL) btf dump file /sys/kernel/btf/vmlinux format c > $(VMLINUX)
 
-uninstall:
-	$(RM) $(BINDIR)/$(PKGNAME)
-	$(RMDIR) $(TARGET)
-	$(RM) $(CHISELDIR)/$(CHISEL)
+# Build BPF code
+$(OBJ)/tracer.bpf.o: $(SRC)/tracer.bpf.c $(INCLUDE)/constants.h $(VMLINUX) | $(OBJ)
+	$(CLANG) -g -O3 -target bpf -D__TARGET_ARCH_$(ARCH) $(IFLAGS) $(CLANG_BPF_SYS_INCLUDES) -c $(filter %.c,$^) -o $@
+	$(LLVM_STRIP) -g $@ # strip useless DWARF info
+
+# Generate BPF skeletons
+$(OBJ)/tracer.skel.h: $(OBJ)/tracer.bpf.o | $(OBJ)
+	$(BPFTOOL) gen skeleton $< > $@
+
+
+# Build user-space code
+$(OBJ)/tracer_runner.o: $(OBJ)/tracer.skel.h
+$(OBJ)/$(MAIN).o: $(OBJ)/tracer.skel.h
+
+$(OBJS): $(OBJ)/%.o: $(SRC)/%.cpp $(INCLUDES) | $(OBJ)
+	$(CC) $(CXXFLAGS) $(IFLAGS) -c $< -o $@
+
+# Build application binary
+$(BIN)/$(MAIN): $(OBJS) | $(BIN)
+	$(CC) $(CXXFLAGS) $^ $(ALL_LDFLAGS) -lbpf -lelf -lz -o $@
+
+# delete failed targets
+.DELETE_ON_ERROR:
+
+# keep intermediate (.skel.h, .bpf.o, etc) targets
+.SECONDARY:
