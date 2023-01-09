@@ -1,45 +1,62 @@
-#include <signal.h>
+#include <csignal>
+#include <cstdio>
+#include <future>
+#include <functional>
 
-#include "tracer_runner.h"
-#include "globals.h"
+#include "bpf_provider.h"
+#include "consumer.h"
 
-volatile bool exiting = false;
-pid_t root_pid;
+std::function<void(int)> exit_handler;
 
-static void sig_handler(int sig) {
-	exiting = true;
+void sig_handler(int signal) {
+    exit_handler(signal);
 }
 
 int main(int argc, char **argv) {
+    fprintf(stderr, "Main starting!\n");
+
     sigset_t sig_usr, default_set;
     sigemptyset(&sig_usr);
     sigaddset(&sig_usr, SIGUSR1);
     sigprocmask(SIG_BLOCK, &sig_usr, &default_set);
 
-	int pid = fork();
-	if (!pid) {
-		struct sigaction resume;
+    pid_t pid = fork();
+    fprintf(stderr, "Forked: %d!\n", pid);
+    
+    if (!pid) {
+        struct sigaction resume;
         resume.sa_handler = [](int signal){};
         resume.sa_flags = 0;
-        sigaction(SIGUSR1, &resume, NULL);
+        sigaction(SIGUSR1, &resume, nullptr);
 
+        fprintf(stderr, "Child going to sleep\n");
         sigsuspend(&default_set);
-        sigprocmask(SIG_SETMASK, &default_set, NULL);
+        sigprocmask(SIG_SETMASK, &default_set, nullptr);
 
-		execvp(argv[1], argv+1);
-		return 1;
-	}
+        execvp(argv[1], argv+1);
+        return 1;
+    }
 
-    root_pid = pid;
+    sigprocmask(SIG_SETMASK, &default_set, nullptr);
 
-    sigprocmask(SIG_SETMASK, &default_set, NULL);
+    BPFProvider provider(pid);
+    Consumer consumer(pid);
 
-	/* Cleaner handling of Ctrl-C */
-	signal(SIGINT, sig_handler);
-	signal(SIGTERM, sig_handler);
+    exit_handler = [&](int signal) { 
+        consumer.stop();
+        provider.stop();
+    };
 
-    TracerRunner runner;
-    runner.init();
-    kill(pid, SIGUSR1);
-    return runner.listen();
+    /* Cleaner handling of Ctrl-C */
+    std::signal(SIGTERM, sig_handler);
+    std::signal(SIGINT, sig_handler);
+
+    std::thread consumer_thread = std::thread([&]() {
+        consumer.start(provider);
+    });
+
+    int ret = provider.start();
+    provider.stop();
+    consumer_thread.join();
+    return ret;
 }

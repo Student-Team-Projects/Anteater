@@ -1,5 +1,3 @@
-CC := clang
-
 OBJ := obj
 INCLUDE := include
 BIN := bin
@@ -9,14 +7,12 @@ SRC := src
 INCLUDES := $(INCLUDE) $(OBJ)
 
 SRCS := $(wildcard $(SRC)/*.cpp)
-# BPF_SRCS := $(filter %.bpf.c, $(SRCS))
 
 MAIN = main
-# SRCS := $(filter-out $(BPF_SRCS),$(FULL_SRCS))
-# OBJS := $(filter-out main.o,$(SRCS:.cpp=.o))
 OBJS := $(patsubst $(SRC)/%.cpp,$(OBJ)/%.o,$(SRCS))
 
 # tools
+CXX := clang++
 CLANG ?= clang
 LLVM_STRIP ?= llvm-strip
 BPFTOOL := bpftool
@@ -25,7 +21,7 @@ ARCH := $(shell uname -m | sed 's/x86_64/x86/' | sed 's/aarch64/arm64/' | sed 's
 
 # flags
 IFLAGS := $(patsubst %,-I%,$(INCLUDES))
-CXXFLAGS := -O3 -Wall -std=c++17
+CXXFLAGS := -g -Wall -std=c++20 -fsanitize=address
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
 # Get Clang's default includes on this system. We'll explicitly add these dirs
@@ -66,15 +62,15 @@ $(OBJ)/tracer.skel.h: $(OBJ)/tracer.bpf.o | $(OBJ)
 
 
 # Build user-space code
-$(OBJ)/tracer_runner.o: $(OBJ)/tracer.skel.h
+$(OBJ)/bpf_provider.o: $(OBJ)/tracer.skel.h
 $(OBJ)/$(MAIN).o: $(OBJ)/tracer.skel.h
 
-$(OBJS): $(OBJ)/%.o: $(SRC)/%.cpp $(INCLUDES) | $(OBJ)
-	$(CC) $(CXXFLAGS) $(IFLAGS) -c $< -o $@
+$(OBJS): $(OBJ)/%.o: $(SRC)/%.cpp | $(OBJ)
+	$(CXX) $(CXXFLAGS) $(IFLAGS) -c $< -o $@
 
 # Build application binary
 $(BIN)/$(MAIN): $(OBJS) | $(BIN)
-	$(CC) $(CXXFLAGS) $^ $(ALL_LDFLAGS) -lbpf -lelf -lz -o $@
+	$(CXX) $(CXXFLAGS) $^ $(ALL_LDFLAGS) -lbpf -lelf -lz -o $@
 
 # delete failed targets
 .DELETE_ON_ERROR:
