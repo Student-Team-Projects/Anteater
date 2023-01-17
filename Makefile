@@ -2,9 +2,11 @@ OBJ := obj
 INCLUDE := include
 BIN := bin
 SRC := src
+CHISEL := proc_tree.lua
 
 # targets
 INCLUDES := $(INCLUDE) $(OBJ)
+CHISELDIR := $(DESTDIR)/usr/share/sysdig/chisels
 
 SRCS := $(wildcard $(SRC)/*.cpp)
 
@@ -21,7 +23,7 @@ ARCH := $(shell uname -m | sed 's/x86_64/x86/' | sed 's/aarch64/arm64/' | sed 's
 
 # flags
 IFLAGS := $(patsubst %,-I%,$(INCLUDES))
-CXXFLAGS := -g -Wall -std=c++20 -fsanitize=address
+CXXFLAGS := -g -Wall -std=c++20 -fsanitize=address -D CHISEL="\"$(CHISEL)\""
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
 # Get Clang's default includes on this system. We'll explicitly add these dirs
@@ -41,6 +43,10 @@ all: $(BIN)/$(MAIN)
 .PHONY: clean
 clean:
 	rm -rf $(OBJ) $(BIN)
+
+.PHONY: chisel
+chisel:
+	cp $(SRC)/$(CHISEL) $(CHISELDIR)
 
 $(OBJ):
 	mkdir -p $(OBJ)
