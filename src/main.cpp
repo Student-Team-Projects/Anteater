@@ -1,10 +1,13 @@
 #include <csignal>
 #include <cstdio>
+
 #include <future>
 #include <functional>
+#include <iostream>
 
 #include "bpf_provider.h"
 #include "consumer.h"
+#include "sysdig_provider.h"
 
 std::function<void(int)> exit_handler;
 
@@ -13,7 +16,17 @@ void sig_handler(int signal) {
 }
 
 int main(int argc, char **argv) {
-    fprintf(stderr, "Main starting!\n");
+    std::cout << "[Main] Starting!\n";
+
+    // TODO: use existing arguments parser (argp??)
+    argv++; argc--;
+
+    // BPF is the default provider
+    bool use_sysdig = false;
+    if (!strcmp(argv[0], "--sysdig")) {  
+        use_sysdig = true;
+        argv++; argc--;
+    }
 
     sigset_t sig_usr, default_set;
     sigemptyset(&sig_usr);
@@ -21,7 +34,7 @@ int main(int argc, char **argv) {
     sigprocmask(SIG_BLOCK, &sig_usr, &default_set);
 
     pid_t pid = fork();
-    fprintf(stderr, "Forked: %d!\n", pid);
+    std::cout << "[Main] Forked " << pid << "\n";
     
     if (!pid) {
         struct sigaction resume;
@@ -29,34 +42,46 @@ int main(int argc, char **argv) {
         resume.sa_flags = 0;
         sigaction(SIGUSR1, &resume, nullptr);
 
-        fprintf(stderr, "Child going to sleep\n");
+        std::cout << "[Main] Program process going to sleep\n";
+        
         sigsuspend(&default_set);
         sigprocmask(SIG_SETMASK, &default_set, nullptr);
 
-        execvp(argv[1], argv+1);
+        execvp(*argv, argv);
         return 1;
     }
 
     sigprocmask(SIG_SETMASK, &default_set, nullptr);
 
-    BPFProvider provider(pid);
     Consumer consumer(pid);
+
+    Provider* provider_ptr = nullptr;
+    if (use_sysdig)
+        provider_ptr = new SysdigProvider(pid);
+    else
+        provider_ptr = new BPFProvider(pid);
 
     exit_handler = [&](int signal) { 
         consumer.stop();
-        provider.stop();
+        provider_ptr->stop();
     };
 
-    /* Cleaner handling of Ctrl-C */
+    // Cleaner handling of Ctrl-C */
     std::signal(SIGTERM, sig_handler);
     std::signal(SIGINT, sig_handler);
 
     std::thread consumer_thread = std::thread([&]() {
-        consumer.start(provider);
+        consumer.start(
+            *provider_ptr,
+            (use_sysdig) ? true : false // BPF doesn't convert buffers to hex yet
+        );
     });
 
-    int ret = provider.start();
-    provider.stop();
+    int ret = provider_ptr->start();
+    provider_ptr->stop();
     consumer_thread.join();
+
+    delete provider_ptr;
+
     return ret;
 }

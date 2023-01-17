@@ -2,8 +2,9 @@
 
 enum event_type {
 	FORK,
+	EXEC,
 	EXIT,
-	WRITE
+	WRITE,
 };
 
 struct event {

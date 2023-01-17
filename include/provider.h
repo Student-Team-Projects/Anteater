@@ -1,7 +1,7 @@
 #pragma once
 
-#include <memory>
 #include <functional>
+#include <memory>
 
 #include "event.h"
 
@@ -17,9 +17,9 @@ class Provider {
         unique_malloc_ptr ptr;
         size_t sz;
     };
-    /** Consumes a pointer to the oldest unconsumed value and
-    lets the provider free the pointer from the previous call.
-    Blocks if there is no value to be consumed. */
+    /* Consumes a pointer to the oldest unconsumed value and
+     * lets the provider free the pointer from the previous call.
+     * Blocks if there is no value to be consumed. */
     virtual event_ref provide() = 0;
     // start listening to events
     virtual int start() = 0;
