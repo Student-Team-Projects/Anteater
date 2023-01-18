@@ -7,6 +7,10 @@
 #define MAX_CONCURRENT_WRITES 1024
 #define DEFAULT_QUEUE_CAPACITY 32 * 1024 * 1024
 
+#ifndef TASK_COMM_LEN
+#define TASK_COMM_LEN 16
+#endif
+
 // Sysdig constants
 #ifndef CHISEL
 #define CHISEL "" // This is defined in Makefile
