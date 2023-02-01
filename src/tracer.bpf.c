@@ -9,6 +9,8 @@
 
 #define MIN(a, b) a < b ? a : b
 
+#define SET_TIMESTAMP(e) e->timestamp = boot_time + bpf_ktime_get_boot_ns()
+
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 // from /sys/kernel/debug/tracing/events/syscalls/sys_enter_write/format
@@ -20,9 +22,14 @@ struct write_enter_ctx {
     size_t count;
 };
 
+// has to be castable to Event
 struct write_event {
-    enum event_type event_type;
+    enum EventType event_type;
     pid_t pid;
+    u64 timestamp;
+
+    enum Stream stream;
+    size_t length;
     char data[MAX_WRITE_SIZE];
 };
 
@@ -54,33 +61,43 @@ struct {
     __uint(max_entries, EVENT_RING_BUFFER_SIZE);
 } rb SEC(".maps");
 
+// saved write params
+struct write_params {
+    long int fd;
+    const char *buf;
+};
+
 // writes in progress
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, u64);
-    __type(value, const char *);
+    __type(value, struct write_params);
     __uint(max_entries, MAX_CONCURRENT_WRITES);
 } writes SEC(".maps");
+
+// time of last boot, injected by user
+const volatile uint64_t boot_time;
 
 SEC("tp/sched/sched_process_fork")
 int handle_fork(struct trace_event_raw_sched_process_fork *ctx)
 {
-    pid_t pid = ctx->child_pid, ppid = ctx->parent_pid;
-    if (!bpf_map_lookup_elem(&pid_tree, &ppid))
+    pid_t cpid = BPF_CORE_READ(ctx, child_pid), pid = BPF_CORE_READ(ctx, parent_pid);
+    if (!bpf_map_lookup_elem(&pid_tree, &pid))
         return 0;
 
-    bpf_map_update_elem(&pid_tree, &pid, &ppid, BPF_ANY);
+    bpf_map_update_elem(&pid_tree, &cpid, &pid, BPF_ANY);
 
     /* reserve sample from BPF ringbuf */
-    struct event *e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
+    struct Event *e = bpf_ringbuf_reserve(&rb, sizeof(struct Event), 0);
     if (!e) {
-        bpf_printk("Dropping fork of process %lu from %lu\n", pid, ppid);
+        bpf_printk("Dropping fork of process %lu from %lu\n", cpid, pid);
         return 0;
     }
 
     e->event_type = FORK;
     e->pid = pid;
-    e->ppid = ppid;
+    e->fork.child_pid = cpid;
+    SET_TIMESTAMP(e);
 
     bpf_ringbuf_submit(e, 0);
     return 0;
@@ -97,7 +114,7 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
         return 0;
 
     /* reserve sample from BPF ringbuf */
-    struct event *e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
+    struct Event *e = bpf_ringbuf_reserve(&rb, sizeof(struct Event), 0);
     if (!e) {
         bpf_printk("Dropping exit of process %lu\n", pid);
         return 0;
@@ -108,7 +125,34 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 
     e->event_type = EXIT;
     e->pid = pid;
-    e->exit_code = (BPF_CORE_READ(task, exit_code) >> 8) & 0xff;
+    e->exit.code = (BPF_CORE_READ(task, exit_code) >> 8) & 0xff;
+    SET_TIMESTAMP(e);
+
+    bpf_ringbuf_submit(e, 0);
+    return 0;
+}
+
+SEC("tp/sched/sched_process_exec")
+int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
+{
+    pid_t pid = bpf_get_current_pid_tgid() >> 32;
+
+    // ignore non-descendant
+    if (!bpf_map_lookup_elem(&pid_tree, &pid)) {
+        return 0;
+    }
+
+    struct Event *e = bpf_ringbuf_reserve(&rb, sizeof(struct Event) + TASK_COMM_LEN, 0);
+    if (!e) {
+        bpf_printk("Dropping exec of process %lu\n", pid);
+        return 0;
+    }
+
+    e->event_type = EXEC;
+    e->pid = pid;
+    SET_TIMESTAMP(e);
+    bpf_get_current_comm(&e->exec.data, TASK_COMM_LEN);
+    e->exec.length = TASK_COMM_LEN;
 
     bpf_ringbuf_submit(e, 0);
     return 0;
@@ -121,12 +165,16 @@ int handle_write_enter(struct write_enter_ctx *ctx)
     u64 id = bpf_get_current_pid_tgid();
     pid_t pid = id >> 32;
 
-    // ignore non-descendant
-    if (!bpf_map_lookup_elem(&pid_tree, &pid))
+    // ignore non-descendant and non-stdout/stderr
+    if (ctx->fd != 1 && ctx->fd != 2 && !bpf_map_lookup_elem(&pid_tree, &pid))
         return 0;
 
+    struct write_params params;
+    params.buf = ctx->buf;
+    params.fd = ctx->fd;
+
     const char *buf = ctx->buf;
-    bpf_map_update_elem(&writes, &id, &buf, BPF_ANY);
+    bpf_map_update_elem(&writes, &id, &params, BPF_ANY);
     return 0;
 }
 
@@ -141,31 +189,35 @@ int handle_write_exit(struct write_exit_ctx *ctx)
     if (!bpf_map_lookup_elem(&pid_tree, &pid))
         return 0;
 
-    const char **buf = bpf_map_lookup_elem(&writes, &id);
-    if (!buf)
+    struct write_params *params = bpf_map_lookup_elem(&writes, &id);
+    if (!params)
         return 0;
     bpf_map_delete_elem(&writes, &id);
 
     if (ctx->ret < 0)
         return 0;
+
     size_t wsize = MIN(ctx->ret, MAX_WRITE_SIZE);
 
     u32 cpuid = bpf_get_smp_processor_id();
-    struct write_event *aux = bpf_map_lookup_elem(&auxmaps, &cpuid);
-    if (!aux)
+    struct write_event *e = bpf_map_lookup_elem(&auxmaps, &cpuid);
+    if (!e)
         return 0;
 
-    aux->event_type = WRITE;
-    aux->pid = pid;
+    e->event_type = WRITE;
+    e->pid = pid;
+    e->length = wsize;
+    e->stream = params->fd == 1 ? STDOUT : STDERR;
+    SET_TIMESTAMP(e);
 
-    long err = bpf_probe_read_user(aux->data, wsize, *buf);
+    long err = bpf_probe_read_user(e->data, wsize, params->buf);
     if (err) {
-        bpf_printk("Error %ld on copying data from address %p of size %u\n", err, *buf, wsize);
+        bpf_printk("Error %ld on copying data from address %p of size %u\n", err, params->buf, wsize);
         return 0;
     }
 
     /* send data to user-space for post-processing, have to use bpf_ringbuf_output due to variable size */
-    err = bpf_ringbuf_output(&rb, aux, wsize + offsetof(struct write_event, data), 0);
+    err = bpf_ringbuf_output(&rb, e, wsize + offsetof(struct write_event, data), 0);
     if (err) {
         bpf_printk("Dropping write of size %lu!\n", wsize);
     }

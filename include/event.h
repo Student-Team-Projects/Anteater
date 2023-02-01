@@ -1,18 +1,37 @@
 #pragma once
 
-enum event_type {
-	FORK,
-	EXEC,
-	EXIT,
-	WRITE,
+enum Stream {
+    STDOUT,
+    STDERR
 };
 
-struct event {
-	enum event_type event_type;
-	pid_t pid;
-	union {
-		pid_t ppid;
-		unsigned exit_code;
-		void *buf;
-	};
+enum EventType {
+    WRITE,
+    EXEC,
+    EXIT,
+    FORK
+};
+
+struct Event {
+    enum EventType event_type;
+    pid_t pid;
+    uint64_t timestamp;
+
+    union {
+        struct { // write
+            enum Stream stream;
+            size_t length;
+            char data[];
+        } write;
+        struct { // fork
+            pid_t child_pid;
+        } fork;
+        struct { // exec
+            size_t length;
+            char data[];
+        } exec;
+        struct { // exit
+            int code;
+        } exit;
+    };
 };

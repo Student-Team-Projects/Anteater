@@ -28,7 +28,7 @@ class BPFProvider : public Provider {
 
     inline pid_t get_root() const { return root_pid; };
     void stop() override { exiting = true; }
-    void alloc_and_push(const event *pt, size_t sz);
+    void alloc_and_push(const Event *pt, size_t sz);
 
   private:
     int cleanup(int err);

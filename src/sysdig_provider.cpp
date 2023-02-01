@@ -52,7 +52,7 @@ int SysdigProvider::init() {
 }
 
 int SysdigProvider::listen() {
-	// Process events
+    // Process events
     close(pipe_fds[1]);
     FILE *sysdig_info = fdopen(pipe_fds[0], "r");
 
@@ -77,16 +77,13 @@ int SysdigProvider::parse_and_push(std::string line, ssize_t len) {
     std::map<std::string, std::string> params = map_line_to_params(line, len);
 
     size_t buf_len = 0;
-    size_t add_sz = 0;
     if (params["type"] == "EXECVE")
         buf_len = params["name"].length();
     else if (params["type"] == "WRITE")
         buf_len = params["data"].length();
-    else
-        add_sz = 4;
 
-    size_t sz = offsetof(struct event, buf) + buf_len + add_sz;
-    event *pt = static_cast<event *>(malloc(sz));
+    size_t sz = sizeof(Event) + buf_len;
+    Event *pt = static_cast<Event *>(malloc(sz));
 
     if (params["pid"] == "nil") {
         std::cerr << "[Provider] Encountered event with nil pid!\n";
@@ -101,22 +98,26 @@ int SysdigProvider::parse_and_push(std::string line, ssize_t len) {
             std::cerr << "[Provider] Encountered fork event with nil ppid!\n";
             return 1;
         }
-        pt->ppid = stoi(params["ppid"]);
+        // TODO: hacky, would be better if pid and ppid where swapped in chisel
+        pt->pid = stoi(params["ppid"]);
+        pt->fork.child_pid = stoi(params["pid"]);
     } else if (params["type"] == "PROCEXIT") {
         // TODO: This doesn't work, incorrect exit code
         pt->event_type = EXIT;
-        pt->exit_code = (unsigned)(123);
+        pt->exit.code = (unsigned)(123);
     } else if (params["type"] == "WRITE") {
         pt->event_type = WRITE;
-        memcpy(&pt->buf, params["data"].data(), buf_len);
+        pt->write.length = buf_len;
+        memcpy(&pt->write.data, params["data"].data(), buf_len);
     } else if (params["type"] == "EXECVE") {
         pt->event_type = EXEC;
-        memcpy(&pt->buf, params["name"].data(), buf_len);
+        pt->exec.length = buf_len;
+        memcpy(&pt->exec.data, params["name"].data(), buf_len);
     } else {
         std::cerr << "[Provider] Unknown event type " << params["type"] << "\n";
     }
 
-    refs.push({unique_malloc_ptr(pt), sz});
+    refs.push(event_ref(pt));
 
     return 0;
 }
