@@ -5,6 +5,10 @@
 #include <functional>
 #include <iostream>
 
+#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+#include "spdlog/spdlog.h"
+#include "spdlog/sinks/basic_file_sink.h"
+
 #include "bpf_provider.h"
 #include "consumer.h"
 #include "sysdig_provider.h"
@@ -16,7 +20,13 @@ void sig_handler(int signal) {
 }
 
 int main(int argc, char **argv) {
-    std::cout << "[Main] Starting!\n";
+    // Setting up logs
+    std::string logs_file_path = "logs/logs_" + std::to_string(time(NULL)) + ".txt";
+    auto logger = spdlog::basic_logger_mt("file_logger", logs_file_path);
+    spdlog::set_default_logger(logger);
+    spdlog::set_pattern("[%d/%m/%Y %T%z][%-20!s:%-4!# %-10!!][%-5!l] %v");
+    
+    SPDLOG_INFO("Starting debugger execution");
 
     // TODO: use existing arguments parser (argp??)
     argv++; argc--;
@@ -34,15 +44,13 @@ int main(int argc, char **argv) {
     sigprocmask(SIG_BLOCK, &sig_usr, &default_set);
 
     pid_t pid = fork();
-    std::cout << "[Main] Forked " << pid << "\n";
-    
     if (!pid) {
         struct sigaction resume;
         resume.sa_handler = [](int signal){};
         resume.sa_flags = 0;
         sigaction(SIGUSR1, &resume, nullptr);
 
-        std::cout << "[Main] Program process going to sleep\n";
+        SPDLOG_INFO("Program process going to sleep");
         
         sigsuspend(&default_set);
         sigprocmask(SIG_SETMASK, &default_set, nullptr);
@@ -66,7 +74,7 @@ int main(int argc, char **argv) {
         provider_ptr->stop();
     };
 
-    // Cleaner handling of Ctrl-C */
+    // Cleaner handling of Ctrl-C
     std::signal(SIGTERM, sig_handler);
     std::signal(SIGINT, sig_handler);
 

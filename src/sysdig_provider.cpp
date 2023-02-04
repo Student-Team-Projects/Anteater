@@ -15,6 +15,8 @@
 #include <string>
 #include <sstream>
 
+#include "spdlog/spdlog.h"
+
 #include "constants.h"
 #include "event.h"
 #include "utils.h"
@@ -33,7 +35,7 @@ int SysdigProvider::init() {
         dup2(pipe_fds[1], STDOUT_FILENO);
         close(pipe_fds[1]);
 
-        std::cerr << "[Provider] Starting sysdig\n";
+        SPDLOG_INFO("Starting sysdig");
 
         execlp(
             SUDO, 
@@ -60,17 +62,23 @@ int SysdigProvider::listen() {
     size_t buffer_size = 0;
     ssize_t len;
 
-    std::cerr << "[Provider] Starting processing events\n";
+    SPDLOG_INFO("Starting processing events");
     
-    while (!exiting && (len = getline(&buffer, &buffer_size, sysdig_info)) != -1) 
-        parse_and_push(buffer, len);
+    int err = 0;
+    while (!exiting && (len = getline(&buffer, &buffer_size, sysdig_info)) != -1) {
+        err = parse_and_push(buffer, len);
+	if (err != 0) stop();
+    }
 
-    std::cerr << "[Provider] Events processing finished\n";
+    if (err != 0) 
+        SPDLOG_ERROR("Exiting provider with error code: " + std::to_string(err));
+    else 
+        SPDLOG_INFO("Events processing finished successfully");
 
     // Cleanup after all events have been processed
-    cleanup(0, buffer);
+    cleanup(err, buffer);
 
-    return 0;
+    return err;
 }
 
 int SysdigProvider::parse_and_push(std::string line, ssize_t len) {
@@ -86,7 +94,7 @@ int SysdigProvider::parse_and_push(std::string line, ssize_t len) {
     Event *pt = static_cast<Event *>(malloc(sz));
 
     if (params["pid"] == "nil") {
-        std::cerr << "[Provider] Encountered event with nil pid!\n";
+        SPDLOG_ERROR("Event with nil pid! Exiting provider");
         return 1;
     }
 	
@@ -97,7 +105,7 @@ int SysdigProvider::parse_and_push(std::string line, ssize_t len) {
     if (params["type"] == "FORK") {
         pt->event_type = FORK;
         if (params["ppid"] == "nil") {
-            std::cerr << "[Provider] Encountered fork event with nil ppid!\n";
+            SPDLOG_ERROR("Fork event with nil ppid!");
             return 1;
         }
         // Hacky, would be better if pid and ppid where swapped in chisel
@@ -105,17 +113,18 @@ int SysdigProvider::parse_and_push(std::string line, ssize_t len) {
         pt->fork.child_pid = stoi(params["pid"]);
     } else if (params["type"] == "PROCEXIT") {
         if (params["status"] == "nil") {
-	    std::cerr << "[Provider] Exit with nil status code!\n";
-	    return 1;
+	    SPDLOG_WARN("Exit with nil status code! Using -1 value as fallback");
+	    pt->exit.code = -1;
+	} else {
+            /* Sysdig has a bug that prints status shifted 8 bits to the left
+	     * It probably will be fixed in the future so this code might stop working */
+            pt->exit.code = (stoi(params["status"]) >> 8);
 	}
-        pt->event_type = EXIT;
-	/* Sysdig has a bug that prints status shifted 8 bits to the left
-	 * It probably will be fixed in the future so this code might stop working */
-        pt->exit.code = (stoi(params["status"]) >> 8);
+	pt->event_type = EXIT;
     } else if (params["type"] == "WRITE") {
 	if (params["fd"] == "nil") {
-	    std::cerr<< "[Provider] Write with nil file descriptor!\n";
-	    return 1;
+	    SPDLOG_WARN("Write with nil file descriptor! Provider will ignore this event and continue");
+	    return 0;
 	}
 	unsigned long fd = stoi(params["fd"]);
 	/* This behavior is different than we would like it.
@@ -134,7 +143,9 @@ int SysdigProvider::parse_and_push(std::string line, ssize_t len) {
         pt->exec.length = buf_len;
         memcpy(&pt->exec.data, params["name"].data(), buf_len);
     } else {
-        std::cerr << "[Provider] Unknown event type " << params["type"] << "\n";
+        SPDLOG_WARN("Unknown event type: " + params["type"] + 
+	    ". Provider will ignore this event and continue");
+	return 0;
     }
 
     refs.push(event_ref(pt));
@@ -162,7 +173,7 @@ std::map<std::string, std::string> SysdigProvider::map_line_to_params(std::strin
 }
 
 int SysdigProvider::cleanup(int err, char *buffer) {
-    std::cerr << "[Provider] Cleanup\n";
+    SPDLOG_INFO("Starting cleanup after main processing loop");
 
     refs.unblock();
     free(buffer);
@@ -174,4 +185,9 @@ int SysdigProvider::cleanup(int err, char *buffer) {
 
 Provider::event_ref SysdigProvider::provide() {
     return refs.pop();
+}
+
+void SysdigProvider::stop() {
+    SPDLOG_INFO("Stopping provider");
+    exiting = true;
 }

@@ -76,7 +76,7 @@ $(OBJS): $(OBJ)/%.o: $(SRC)/%.cpp | $(OBJ)
 
 # Build application binary
 $(BIN)/$(MAIN): $(OBJS) | $(BIN)
-	$(CXX) $(CXXFLAGS) $^ $(ALL_LDFLAGS) -lbpf -lelf -lz -o $@
+	$(CXX) $(CXXFLAGS) $^ $(ALL_LDFLAGS) -lbpf -lelf -lfmt -lz -o $@
 
 # delete failed targets
 .DELETE_ON_ERROR:
