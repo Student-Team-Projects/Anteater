@@ -49,7 +49,7 @@ evt_fields = {
     "evt.dir",
     "evt.rawarg.data",
     "evt.rawres",
-    "evt.time",
+    "evt.rawtime",
     "evt.type",
     "proc.args",
     "proc.name",
@@ -139,7 +139,7 @@ function on_event()
         .. " name=" .. hexencode(tostring(proc_name))
         .. " res=" .. (evt_rawres or "nil")
         .. " data=" .. hexencode(tostring(evt_rawarg_data))
-        .. " time=" .. evt_time
+        .. " time=" .. evt_rawtime
     )
     
     if evt_type == "procexit" and proc_pid == root_pid then

@@ -91,7 +91,9 @@ int SysdigProvider::parse_and_push(std::string line, ssize_t len) {
     }
 
     pt->pid = stoi(params["pid"]);
-
+    // params["time"] is in exponential notation
+    pt->timestamp = (uint64_t)stod(params["time"]);
+	
     if (params["type"] == "FORK") {
         pt->event_type = FORK;
         if (params["ppid"] == "nil") {

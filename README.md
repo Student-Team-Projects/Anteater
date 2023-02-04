@@ -5,7 +5,7 @@
 On archlinux
 
 ```
-sudo pacman -Sy bpf clang llvm
+sudo pacman -Sy bpf clang llvm llvm-libs
 ```
 
 
