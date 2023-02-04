@@ -18,5 +18,10 @@
 
 #define SYSDIG "sysdig"
 
+// SPDLOG constants
+#ifndef LOGSDIR
+#define LOGSDIR "" // This is defined in Makefile
+#endif
+
 // Other constants
 #define SUDO "sudo"

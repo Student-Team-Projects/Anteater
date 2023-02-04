@@ -21,7 +21,7 @@ void sig_handler(int signal) {
 
 int main(int argc, char **argv) {
     // Setting up logs
-    std::string logs_file_path = "logs/logs_" + std::to_string(time(NULL)) + ".txt";
+    std::string logs_file_path = std::string(LOGSDIR) + "/logs_" + std::to_string(time(NULL)) + ".txt";
     auto logger = spdlog::basic_logger_mt("file_logger", logs_file_path);
     spdlog::set_default_logger(logger);
     spdlog::set_pattern("[%d/%m/%Y %T%z][%-20!s:%-4!# %-10!!][%-5!l] %v");

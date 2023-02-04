@@ -4,9 +4,9 @@ BIN := bin
 SRC := src
 CHISEL := proc_tree.lua
 
-# targets
 INCLUDES := $(INCLUDE) $(OBJ)
 CHISELDIR := $(DESTDIR)/usr/share/sysdig/chisels
+LOGSDIR := /usr/share/debugger/logs
 
 SRCS := $(wildcard $(SRC)/*.cpp)
 
@@ -23,7 +23,7 @@ ARCH := $(shell uname -m | sed 's/x86_64/x86/' | sed 's/aarch64/arm64/' | sed 's
 
 # flags
 IFLAGS := $(patsubst %,-I%,$(INCLUDES))
-CXXFLAGS := -g -Wall -std=c++20 -fsanitize=address -D CHISEL="\"$(CHISEL)\""
+CXXFLAGS := -g -Wall -std=c++20 -fsanitize=address -D CHISEL="\"$(CHISEL)\"" -D LOGSDIR="\"$(LOGSDIR)\""
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
 # Get Clang's default includes on this system. We'll explicitly add these dirs
@@ -77,6 +77,8 @@ $(OBJS): $(OBJ)/%.o: $(SRC)/%.cpp | $(OBJ)
 # Build application binary
 $(BIN)/$(MAIN): $(OBJS) | $(BIN)
 	$(CXX) $(CXXFLAGS) $^ $(ALL_LDFLAGS) -lbpf -lelf -lfmt -lz -o $@
+
+
 
 # delete failed targets
 .DELETE_ON_ERROR:
