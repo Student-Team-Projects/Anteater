@@ -89,7 +89,7 @@ int SysdigProvider::parse_and_push(std::string line, ssize_t len) {
         std::cerr << "[Provider] Encountered event with nil pid!\n";
         return 1;
     }
-
+	
     pt->pid = stoi(params["pid"]);
     // params["time"] is in exponential notation
     pt->timestamp = (uint64_t)stod(params["time"]);
@@ -100,13 +100,18 @@ int SysdigProvider::parse_and_push(std::string line, ssize_t len) {
             std::cerr << "[Provider] Encountered fork event with nil ppid!\n";
             return 1;
         }
-        // TODO: hacky, would be better if pid and ppid where swapped in chisel
+        // Hacky, would be better if pid and ppid where swapped in chisel
         pt->pid = stoi(params["ppid"]);
         pt->fork.child_pid = stoi(params["pid"]);
     } else if (params["type"] == "PROCEXIT") {
-        // TODO: This doesn't work, incorrect exit code
+        if (params["status"] == "nil") {
+	    std::cerr << "[Provider] Exit with nil status code!\n";
+	    return 1;
+	}
         pt->event_type = EXIT;
-        pt->exit.code = (unsigned)(123);
+	/* Sysdig has a bug that prints status shifted 8 bits to the left
+	 * It probably will be fixed in the future so this code might stop working */
+        pt->exit.code = (stoi(params["status"]) >> 8);
     } else if (params["type"] == "WRITE") {
 	if (params["fd"] == "nil") {
 	    std::cerr<< "[Provider] Write with nil file descriptor!\n";

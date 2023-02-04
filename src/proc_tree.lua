@@ -47,6 +47,7 @@ evt_types = {
 evt_fields = {
     "evt.args",
     "evt.dir",
+    "evt.rawarg.status",
     "evt.rawarg.data",
     "evt.rawres",
     "evt.rawtime",
@@ -138,7 +139,7 @@ function on_event()
         .. " pid=" .. (proc_pid or "nil")
         .. " ppid=" .. (proc_ppid or "nil")
         .. " name=" .. hexencode(tostring(proc_name))
-        .. " res=" .. (evt_rawres or "nil")
+        .. " status=" .. (evt_rawarg_status or "nil")
         .. " data=" .. hexencode(tostring(evt_rawarg_data))
 	.. " fd=" .. (fd_num or "nil")
         .. " time=" .. evt_rawtime
