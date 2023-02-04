@@ -51,6 +51,7 @@ evt_fields = {
     "evt.rawres",
     "evt.rawtime",
     "evt.type",
+    "fd.num",
     "proc.args",
     "proc.name",
     "proc.pid",
@@ -139,6 +140,7 @@ function on_event()
         .. " name=" .. hexencode(tostring(proc_name))
         .. " res=" .. (evt_rawres or "nil")
         .. " data=" .. hexencode(tostring(evt_rawarg_data))
+	.. " fd=" .. (fd_num or "nil")
         .. " time=" .. evt_rawtime
     )
     

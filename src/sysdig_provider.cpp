@@ -108,6 +108,19 @@ int SysdigProvider::parse_and_push(std::string line, ssize_t len) {
         pt->event_type = EXIT;
         pt->exit.code = (unsigned)(123);
     } else if (params["type"] == "WRITE") {
+	if (params["fd"] == "nil") {
+	    std::cerr<< "[Provider] Write with nil file descriptor!\n";
+	    return 1;
+	}
+	unsigned long fd = stoi(params["fd"]);
+	/* This behavior is different than we would like it.
+	 * We only want writes to STDOUT or STDERR, but 
+	 * this is not equivalent to checking whether 
+	 * fd is 1 or 2, e.g. after dup syscalls */
+	if (fd == 1) pt->write.stream = STDOUT;
+	else if (fd == 2) pt->write.stream = STDERR;
+	else return 0;
+
         pt->event_type = WRITE;
         pt->write.length = buf_len;
         memcpy(&pt->write.data, params["data"].data(), buf_len);

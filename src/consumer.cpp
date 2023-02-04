@@ -33,10 +33,11 @@ void Consumer::consume(Provider &provider) {
         case WRITE:
             if (e->write.length > 0) 
                 printf(
-                    "%-20lu: %-8s %-7u %.*s\n", 
+                    "%-20lu: %-8s %-7u %-8s %.*s\n", 
                     e->timestamp,
                     "WRITE", 
                     e->pid,
+		    (e->write.stream == STDOUT) ? "STDOUT" : "STDERR",
                     static_cast<int>(e->write.length), 
                     (hex_input) ? hex_to_string(e->write.data, e->write.length).data() : e->write.data
                 );
