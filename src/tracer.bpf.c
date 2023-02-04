@@ -63,7 +63,7 @@ struct {
 
 // saved write params
 struct write_params {
-    long int fd;
+    enum Stream fd;
     const char *buf;
 };
 
@@ -165,13 +165,30 @@ int handle_write_enter(struct write_enter_ctx *ctx)
     u64 id = bpf_get_current_pid_tgid();
     pid_t pid = id >> 32;
 
-    // ignore non-descendant and non-stdout/stderr
-    if (ctx->fd != 1 && ctx->fd != 2 && !bpf_map_lookup_elem(&pid_tree, &pid))
+    // ignore non-descendant
+    if (!bpf_map_lookup_elem(&pid_tree, &pid))
+        return 0;
+
+    // get file descriptor table for given process
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    struct file **fdt = BPF_CORE_READ(task, files, fdt, fd);
+
+    // get pointers to open file descriptions of stdout, stderr and target
+    struct file *stdout, *stderr, *dst;
+    if (bpf_probe_read_kernel(&stdout, sizeof(stdout), fdt + 1))
+        return 0;
+    if (bpf_probe_read_kernel(&stderr, sizeof(stdout), fdt + 2))
+        return 0;
+    if (bpf_probe_read_kernel(&dst, sizeof(stdout), fdt + ctx->fd))
+        return 0;
+
+    // if the underlying open file description is different from stdin and stdout, then ignore
+    if (dst != stdout && dst != stderr)
         return 0;
 
     struct write_params params;
     params.buf = ctx->buf;
-    params.fd = ctx->fd;
+    params.fd = dst == stdout ? STDOUT : STDERR;
 
     const char *buf = ctx->buf;
     bpf_map_update_elem(&writes, &id, &params, BPF_ANY);
@@ -207,7 +224,7 @@ int handle_write_exit(struct write_exit_ctx *ctx)
     e->event_type = WRITE;
     e->pid = pid;
     e->length = wsize;
-    e->stream = params->fd == 1 ? STDOUT : STDERR;
+    e->stream = params->fd;
     SET_TIMESTAMP(e);
 
     long err = bpf_probe_read_user(e->data, wsize, params->buf);
