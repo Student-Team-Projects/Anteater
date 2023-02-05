@@ -3,7 +3,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <iostream>
 #include <map>
 #include <string>
 #include <queue>
@@ -27,10 +26,7 @@ class SysdigProvider : public Provider {
     inline pid_t get_root() const { return root_pid; };
     event_ref provide() override;
     int start() override;
-    void stop() override { 
-      std::cerr << "[Provider] Stopping provider\n";
-      exiting = true; 
-    }
+    void stop() override;
 
   private:
     int parse_and_push(std::string line, ssize_t len);

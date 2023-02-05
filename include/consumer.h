@@ -17,8 +17,5 @@ class Consumer {
       this->hex_input = hex_input;
       while (!exiting) consume(provider); 
     };
-    void stop() { 
-      std::cerr << "[Consumer] Stopping consumer\n";
-      exiting = true; 
-    }
+    void stop();
 };

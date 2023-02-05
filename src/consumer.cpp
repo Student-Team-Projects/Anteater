@@ -1,8 +1,9 @@
 #include "consumer.h"
 #include "utils.h"
 
-#include <cstdio>
+#include "spdlog/spdlog.h"
 
+#include <cstdio>
 #include <iostream>
 
 Consumer::Consumer(pid_t root_pid) : root_pid(root_pid) {};
@@ -14,7 +15,7 @@ void Consumer::consume(Provider &provider) {
         return;
 
     if (!e) {
-        std::cerr << "[Consumer] Got null pointer from refs queue. Stopping consuming\n";
+        SPDLOG_ERROR("Got null pointer from refs queue. Stopping consuming");
         stop();
         return;
     }
@@ -33,10 +34,11 @@ void Consumer::consume(Provider &provider) {
         case WRITE:
             if (e->write.length > 0) 
                 printf(
-                    "%-20lu: %-8s %-7u %.*s\n", 
+                    "%-20lu: %-8s %-7u %-8s %.*s\n", 
                     e->timestamp,
                     "WRITE", 
                     e->pid,
+		    (e->write.stream == STDOUT) ? "STDOUT" : "STDERR",
                     static_cast<int>(e->write.length), 
                     (hex_input) ? hex_to_string(e->write.data, e->write.length).data() : e->write.data
                 );
@@ -53,8 +55,12 @@ void Consumer::consume(Provider &provider) {
                 );
             return;
         default:
-            fprintf(stderr, "MALFORMED EVENT WITH TYPE %d\n", e->event_type);
             stop();
             provider.stop();
     }
+}
+
+void Consumer::stop() {
+    SPDLOG_INFO("Stopping consumer");
+    exiting = true;
 }
