@@ -19,24 +19,56 @@ void sig_handler(int signal) {
     exit_handler(signal);
 }
 
+void print_usage() {
+    std::cerr << R"(Usage: debugger [OPTION...] <cmd> <arg1> <arg2>
+    --help               Print this message
+    --sysdig             Use sysdig as provider instead of bpf
+    -logp logs-path      Set custom path to logs output file
+)";
+}
+
 int main(int argc, char **argv) {
-    // Setting up logs
-    std::string logs_file_path = std::string(LOGSDIR) + "/logs_" + std::to_string(time(NULL)) + ".txt";
+    // Parsing command line arguments
+    bool use_sysdig = false;
+    std::string logs_file_path = std::string(LOGSDIR) + "/logs_" 
+        + std::to_string(time(NULL)) + ".txt";
+
+    argv++; argc--;
+    while (true) {
+        if (argc <= 0 || !argv[0] || !strlen(argv[0])) {
+            // Malformed arguments
+            print_usage();
+            return 1;
+        }
+        std::string arg(argv[0]);
+        if (arg[0] != '-') {
+            // No more arguments
+            break;
+        }
+        if (arg == "--sysdig") {
+            // Using sysdig as provider, bpf is default
+            use_sysdig = true;
+        } else if (arg == "-logp") {
+            argv++; argc--;
+            logs_file_path = std::string(argv[0]);
+        } else if (arg == "--help") {
+            print_usage();
+            return 0;
+        } else {
+            // Unknown argument
+            std::cerr << "Unknown argument " << arg << "\n";
+            print_usage();
+            return 1;
+        }
+        argv++; argc--;
+    }
+    
+    // Setting up logs using spdlog library from https://github.com/gabime/spdlog    
     auto logger = spdlog::basic_logger_mt("file_logger", logs_file_path);
     spdlog::set_default_logger(logger);
     spdlog::set_pattern("[%d/%m/%Y %T%z][%-20!s:%-4!# %-10!!][%-5!l] %v");
     
     SPDLOG_INFO("Starting debugger execution");
-
-    // TODO: use existing arguments parser (argp??)
-    argv++; argc--;
-
-    // BPF is the default provider
-    bool use_sysdig = false;
-    if (!strcmp(argv[0], "--sysdig")) {  
-        use_sysdig = true;
-        argv++; argc--;
-    }
 
     sigset_t sig_usr, default_set;
     sigemptyset(&sig_usr);

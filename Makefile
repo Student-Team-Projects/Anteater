@@ -6,7 +6,7 @@ CHISEL := proc_tree.lua
 
 INCLUDES := $(INCLUDE) $(OBJ)
 CHISELDIR := $(DESTDIR)/usr/share/sysdig/chisels
-LOGSDIR := /usr/share/debugger/logs
+LOGSDIR := /tmp/debugger/logs
 
 SRCS := $(wildcard $(SRC)/*.cpp)
 
