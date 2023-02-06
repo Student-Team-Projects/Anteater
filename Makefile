@@ -4,14 +4,22 @@ BIN := bin
 SRC := src
 CHISEL := proc_tree.lua
 
-INCLUDES := $(INCLUDE) $(OBJ)
 CHISELDIR := $(DESTDIR)/usr/share/sysdig/chisels
 LOGSDIR := /tmp/debugger/logs
 
-SRCS := $(wildcard $(SRC)/*.cpp)
 
-MAIN = main
+INCLUDES := $(INCLUDE) $(OBJ)
+SRCS := $(wildcard $(SRC)/*.cpp)
 OBJS := $(patsubst $(SRC)/%.cpp,$(OBJ)/%.o,$(SRCS))
+MAIN = main
+
+# BPF variables
+BPF_SRC := $(SRC)/bpf
+BPF_SRCS := $(wildcard $(BPF_SRC)/*.bpf.c)
+BPF_INCLUDES := $(INCLUDES)
+BPF_OBJS := $(patsubst $(BPF_SRC)/%.bpf.c,$(OBJ)/%.bpf.o,$(BPF_SRCS))
+BPF_TRACER := tracer.bpf.o
+BPF_SKELETON := tracer.skel.h
 
 # tools
 CXX := clang++
@@ -25,6 +33,7 @@ ARCH := $(shell uname -m | sed 's/x86_64/x86/' | sed 's/aarch64/arm64/' | sed 's
 IFLAGS := $(patsubst %,-I%,$(INCLUDES))
 CXXFLAGS := -g -Wall -std=c++20 -fsanitize=address -D CHISEL="\"$(CHISEL)\"" -D LOGSDIR="\"$(LOGSDIR)\""
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
+BPF_IFLAGS := $(patsubst %,-I%,$(BPF_INCLUDES))
 
 # Get Clang's default includes on this system. We'll explicitly add these dirs
 # to the includes list when compiling with `-target bpf` because otherwise some
@@ -58,18 +67,21 @@ $(VMLINUX): | $(OBJ)
 	$(BPFTOOL) btf dump file /sys/kernel/btf/vmlinux format c > $(VMLINUX)
 
 # Build BPF code
-$(OBJ)/tracer.bpf.o: $(SRC)/tracer.bpf.c $(INCLUDE)/constants.h $(VMLINUX) | $(OBJ)
-	$(CLANG) -g -O3 -target bpf -D__TARGET_ARCH_$(ARCH) $(IFLAGS) $(CLANG_BPF_SYS_INCLUDES) -c $(filter %.c,$^) -o $@
+$(BPF_OBJS): $(OBJ)/%.o: $(BPF_SRC)/%.c $(BPF_INCLUDES) $(VMLINUX) | $(OBJ)
+	$(CLANG) -g -O3 -target bpf -D__TARGET_ARCH_$(ARCH) $(BPF_IFLAGS) $(CLANG_BPF_SYS_INCLUDES) -c $(filter %.c,$^) -o $@
 	$(LLVM_STRIP) -g $@ # strip useless DWARF info
 
+$(OBJ)/$(BPF_TRACER): $(BPF_OBJS) | $(OBJ)
+	$(BPFTOOL) gen object $@ $^
+
 # Generate BPF skeletons
-$(OBJ)/tracer.skel.h: $(OBJ)/tracer.bpf.o | $(OBJ)
+$(OBJ)/$(BPF_SKELETON): $(OBJ)/$(BPF_TRACER) | $(OBJ)
 	$(BPFTOOL) gen skeleton $< > $@
 
 
 # Build user-space code
-$(OBJ)/bpf_provider.o: $(OBJ)/tracer.skel.h
-$(OBJ)/$(MAIN).o: $(OBJ)/tracer.skel.h
+$(OBJ)/bpf_provider.o: $(OBJ)/$(BPF_SKELETON)
+# $(OBJ)/$(MAIN).o: $(OBJ)/$(BPF_SKELETON)
 
 $(OBJS): $(OBJ)/%.o: $(SRC)/%.cpp | $(OBJ)
 	$(CXX) $(CXXFLAGS) $(IFLAGS) -c $< -o $@
