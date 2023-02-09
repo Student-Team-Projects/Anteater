@@ -63,7 +63,7 @@ int BPFProvider::init() {
     skel->rodata->boot_time = kernel_proc_entry.st_ctim.tv_sec * (uint64_t) 1'000'000'000 + kernel_proc_entry.st_ctim.tv_nsec;
 
     // create per-cpu auxiliary maps
-    err = bpf_map__set_max_entries(skel->maps.auxmaps, get_nprocs());
+    err = bpf_map__set_max_entries(skel->maps.aux_maps, get_nprocs());
     if (err) {
         fprintf(stderr, "Failed to make per-cpu auxiliary maps\n");
         return cleanup(err);

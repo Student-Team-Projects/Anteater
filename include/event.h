@@ -29,6 +29,7 @@ struct Event {
             pid_t child_pid;
         } fork;
         struct { // exec
+            uid_t uid;
             size_t length;
             char data[];
         } exec;
@@ -38,13 +39,3 @@ struct Event {
     };
 };
 
-// has to be castable to Event
-struct write_event {
-    enum EventType event_type;
-    pid_t pid;
-    uint64_t timestamp;
-
-    enum Stream stream;
-    size_t length;
-    char data[MAX_WRITE_SIZE];
-};

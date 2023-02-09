@@ -3,12 +3,12 @@
 #include "event.h"
 #include "constants.h"
 
-// percpu auxiliary maps to copy write buffers
+// percpu auxiliary maps for large events
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __type(key, u32);
-    __type(value, struct write_event);
-} auxmaps __weak SEC(".maps");
+    __type(value, char [MAX_EVENT_SIZE]);
+} aux_maps __weak SEC(".maps");
 
 // process tree with root set by userspace
 struct {
