@@ -44,12 +44,14 @@ void Consumer::consume(Provider &provider) {
                 );
             return;
         case EXEC:
+            convert_spaces(e->exec.data, e->exec.length);
             if (e->exec.length > 0) 
                 printf(
-                    "%-20lu: %-8s %-7u %.*s\n",
+                    "%-20lu: %-8s %-7u %-7u %.*s\n",
                     e->timestamp,
                     "EXEC",
                     e->pid,
+                    e->exec.uid,
                     static_cast<int>(e->exec.length),
                     (hex_input) ? hex_to_string(e->exec.data, e->exec.length).data() : e->exec.data
                 );

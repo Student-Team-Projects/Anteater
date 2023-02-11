@@ -1,7 +1,7 @@
 #pragma once
 
 // BPF constants
-#define MAX_WRITE_SIZE 128 * 1024
+#define MAX_EVENT_SIZE 128 * 1024
 #define EVENT_RING_BUFFER_SIZE 128 * 1024 * 1024
 #define PROC_COUNT_MAX 1 << 22
 #define MAX_CONCURRENT_WRITES 1024

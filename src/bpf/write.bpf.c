@@ -24,6 +24,8 @@ struct write_exit_ctx {
     long ret;
 };
 
+#define MAX_WRITE_SIZE MAX_EVENT_SIZE - offsetof(struct Event, write.data)
+
 // ctx is just a reformatted version of trace_event_raw_sys_enter
 SEC("tp/syscalls/sys_enter_write")
 int handle_write_enter(struct write_enter_ctx *ctx)
@@ -83,26 +85,25 @@ int handle_write_exit(struct write_exit_ctx *ctx)
     size_t wsize = MIN(ctx->ret, MAX_WRITE_SIZE);
 
     u32 cpuid = bpf_get_smp_processor_id();
-    struct write_event *e = bpf_map_lookup_elem(&auxmaps, &cpuid);
+    struct Event *e = bpf_map_lookup_elem(&aux_maps, &cpuid);
     if (!e)
         return 0;
 
     e->event_type = WRITE;
     e->pid = pid;
-    e->length = wsize;
-    e->stream = params->fd;
+    e->write.length = wsize;
+    e->write.stream = params->fd;
     SET_TIMESTAMP(e);
 
-    long err = bpf_probe_read_user(e->data, wsize, params->buf);
+    long err = bpf_probe_read_user(e->write.data, wsize, params->buf);
     if (err) {
         bpf_printk("Error %ld on copying data from address %p of size %u\n", err, params->buf, wsize);
         return 0;
     }
 
-    /* send data to user-space for post-processing, have to use bpf_ringbuf_output due to variable size */
-    err = bpf_ringbuf_output(&rb, e, wsize + offsetof(struct write_event, data), 0);
-    if (err) {
+    // send data to user-space for post-processing, have to use bpf_ringbuf_output due to variable size
+    err = bpf_ringbuf_output(&rb, e, wsize + offsetof(struct Event, write.data), 0);
+    if (err)
         bpf_printk("Dropping write of size %lu!\n", wsize);
-    }
     return 0;
 }
