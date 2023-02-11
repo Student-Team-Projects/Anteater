@@ -4,10 +4,12 @@
 #include <future>
 #include <functional>
 #include <iostream>
+#include <pwd.h>
 
 #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/basic_file_sink.h"
+#include "tclap/CmdLine.h"
 
 #include "bpf_provider.h"
 #include "consumer.h"
@@ -19,112 +21,130 @@ void sig_handler(int signal) {
     exit_handler(signal);
 }
 
-void print_usage() {
-    std::cerr << R"(Usage: debugger [OPTION...] <cmd> <arg1> <arg2>
-    --help               Print this message
-    --sysdig             Use sysdig as provider instead of bpf
-    -logp logs-path      Set custom path to logs output file
-)";
-}
+int main(int argc, const char **argv) {
+    try {
+        // Setting up command line parsing using TCLAP library from https://github.com/mirror/tclap
+        TCLAP::CmdLine cmd("Program for debugging and splitting logs.", ' ', "1.0");
+        TCLAP::ValueArg<std::string> logDirArg(
+            "l", "logp", 
+            "Path to logs.", 
+            false, 
+            std::string(LOGSDIR) + "/logs_" + std::to_string(time(nullptr)) + ".txt",
+            "PATH", 
+            cmd
+        );
+        TCLAP::ValueArg<std::string> userArg(
+            "u", "user", 
+            "User to run the debugged program as.", 
+            false, 
+            "", 
+            "USER", 
+            cmd
+        );
+        TCLAP::SwitchArg sysdigArg(
+            "d", "sysdig",
+            "Use sysdig-based tracer that doesn't require eBPF.", 
+            cmd
+        );
+        TCLAP::UnlabeledMultiArg<std::string> progExecArg(
+            "args", // name required in constructor for some reason?
+            "Program execution to debug", 
+            true,
+            "PROG ARGS",
+            cmd
+        );
+        cmd.parse(argc, argv);
 
-int main(int argc, char **argv) {
-    // Parsing command line arguments
-    bool use_sysdig = false;
-    std::string logs_file_path = std::string(LOGSDIR) + "/logs_" 
-        + std::to_string(time(NULL)) + ".txt";
+        // Update argv to have just the program execution args
+        for (int i = 0; i < progExecArg.getValue().size(); ++i)
+            argv[i] = progExecArg.getValue()[i].c_str();
+        argv[progExecArg.getValue().size()] = nullptr;
 
-    argv++; argc--;
-    while (true) {
-        if (argc <= 0 || !argv[0] || !strlen(argv[0])) {
-            // Malformed arguments
-            print_usage();
+
+        // Setting up logs using spdlog library from https://github.com/gabime/spdlog    
+        auto logger = spdlog::basic_logger_mt("file_logger", logDirArg.getValue());
+        spdlog::set_default_logger(logger);
+        spdlog::set_pattern("[%d/%m/%Y %T%z][%-20!s:%-4!# %-10!!][%-5!l] %v");
+
+        SPDLOG_INFO("Starting debugger execution");
+    
+        sigset_t sig_usr, default_set;
+        sigemptyset(&sig_usr);
+        sigaddset(&sig_usr, SIGUSR1);
+        sigprocmask(SIG_BLOCK, &sig_usr, &default_set);
+
+        uid_t prog_uid = 0;
+
+        if (userArg.isSet()) {
+            passwd *pwd = getpwnam(userArg.getValue().c_str());
+            if (pwd == nullptr) {
+                SPDLOG_ERROR("User " + userArg.getValue() + " does not exist.");
+                return 1;    
+            }
+            prog_uid = pwd->pw_uid;
+        }
+
+        // Fork to run child and tracer
+        pid_t pid = fork();
+        if (!pid) {
+            struct sigaction resume;
+            resume.sa_handler = [](int signal){};
+            resume.sa_flags = 0;
+            sigaction(SIGUSR1, &resume, nullptr);
+
+            if (prog_uid) {
+                setuid(prog_uid);
+                SPDLOG_INFO("Setting UID for program to " + std::to_string(prog_uid) + " (" + userArg.getValue() + ")");
+            }
+
+            SPDLOG_INFO("Program process going to sleep");
+            
+            sigsuspend(&default_set);
+            sigprocmask(SIG_SETMASK, &default_set, nullptr);
+
+            int err = execvp(*argv, const_cast<char **>(argv));
+
+            SPDLOG_ERROR("Failed to exec into program to debug with error " 
+                + std::to_string(err));
             return 1;
         }
-        std::string arg(argv[0]);
-        if (arg[0] != '-') {
-            // No more arguments
-            break;
-        }
-        if (arg == "--sysdig") {
-            // Using sysdig as provider, bpf is default
-            use_sysdig = true;
-        } else if (arg == "-logp") {
-            argv++; argc--;
-            logs_file_path = std::string(argv[0]);
-        } else if (arg == "--help") {
-            print_usage();
-            return 0;
-        } else {
-            // Unknown argument
-            std::cerr << "Unknown argument " << arg << "\n";
-            print_usage();
-            return 1;
-        }
-        argv++; argc--;
-    }
-    
-    // Setting up logs using spdlog library from https://github.com/gabime/spdlog    
-    auto logger = spdlog::basic_logger_mt("file_logger", logs_file_path);
-    spdlog::set_default_logger(logger);
-    spdlog::set_pattern("[%d/%m/%Y %T%z][%-20!s:%-4!# %-10!!][%-5!l] %v");
-    
-    SPDLOG_INFO("Starting debugger execution");
 
-    sigset_t sig_usr, default_set;
-    sigemptyset(&sig_usr);
-    sigaddset(&sig_usr, SIGUSR1);
-    sigprocmask(SIG_BLOCK, &sig_usr, &default_set);
-
-    pid_t pid = fork();
-    if (!pid) {        
-        struct sigaction resume;
-        resume.sa_handler = [](int signal){};
-        resume.sa_flags = 0;
-        sigaction(SIGUSR1, &resume, nullptr);
-
-        SPDLOG_INFO("Program process going to sleep");
-        
-        sigsuspend(&default_set);
         sigprocmask(SIG_SETMASK, &default_set, nullptr);
 
-        int err = execvp(*argv, argv);
+        Consumer consumer(pid);
 
-        SPDLOG_ERROR("Failed to exec into program to debug with error " 
-            + std::to_string(err));
-        return 1;
-    }
+        Provider* provider_ptr = nullptr;
+        if (sysdigArg.getValue())
+            provider_ptr = new SysdigProvider(pid);
+        else
+            provider_ptr = new BPFProvider(pid);
 
-    sigprocmask(SIG_SETMASK, &default_set, nullptr);
+        exit_handler = [&](int signal) { 
+            consumer.stop();
+            provider_ptr->stop();
+        };
 
-    Consumer consumer(pid);
+        // Cleaner handling of Ctrl-C
+        std::signal(SIGTERM, sig_handler);
+        std::signal(SIGINT, sig_handler);
 
-    Provider* provider_ptr = nullptr;
-    if (use_sysdig)
-        provider_ptr = new SysdigProvider(pid);
-    else
-        provider_ptr = new BPFProvider(pid);
+        std::thread consumer_thread = std::thread([&]() {
+            consumer.start(
+                *provider_ptr,
+                (sysdigArg.getValue()) ? true : false // BPF doesn't convert buffers to hex yet
+            );
+        });
 
-    exit_handler = [&](int signal) { 
-        consumer.stop();
+        int ret = provider_ptr->start();
         provider_ptr->stop();
-    };
+        consumer_thread.join();
 
-    // Cleaner handling of Ctrl-C
-    std::signal(SIGTERM, sig_handler);
-    std::signal(SIGINT, sig_handler);
+        delete provider_ptr;
 
-    std::thread consumer_thread = std::thread([&]() {
-        consumer.start(
-            *provider_ptr,
-            (use_sysdig) ? true : false // BPF doesn't convert buffers to hex yet
-        );
-    });
+        return ret;
 
-    int ret = provider_ptr->start();
-    provider_ptr->stop();
-    consumer_thread.join();
-
-    delete provider_ptr;
-
-    return ret;
+    } catch (TCLAP::ArgException &e) {
+        SPDLOG_ERROR(e.error() + " for arg " + e.argId());
+    }
+    return 1;
 }
