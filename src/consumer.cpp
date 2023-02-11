@@ -15,7 +15,7 @@ void Consumer::consume(Provider &provider) {
         return;
 
     if (!e) {
-        SPDLOG_ERROR("Got null pointer from refs queue. Stopping consuming");
+        SPDLOG_ERROR("Got null pointer from provider. Stopping consuming");
         stop();
         return;
     }

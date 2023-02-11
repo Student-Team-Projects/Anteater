@@ -54,9 +54,11 @@ evt_fields = {
     "evt.type",
     "fd.num",
     "proc.args",
+	"proc.cwd",
     "proc.name",
     "proc.pid",
-    "proc.ppid"
+    "proc.ppid",
+	"user.uid"
 }
 
 CHISEL_FIELD_PREFIX = "CHISEL_FIELD_HANDLE_"
@@ -134,14 +136,33 @@ function on_event()
         return false
     end
 
+    -- TODO: Investigate this and make a proper fix
+    --   For some reason chisels captures multiple EXECVE events
+    --   from root_pid with proc_name 'main' at the beginning of execution
+    if proc_pid == root_pid and evt_type == "execve" and proc_name == "main" then
+        return false
+    end
+
+	-- clone === fork for us
+	if evt_type == "clone" then
+		evt_type = "fork"
+	end
+
+    -- ignoring fork events in parent 
+    if evt_type == "fork" and evt_rawres ~= 0 then 
+        return false
+    end
+
     print(
         "type=" .. string.upper(evt_type)
         .. " pid=" .. (proc_pid or "nil")
         .. " ppid=" .. (proc_ppid or "nil")
-        .. " name=" .. hexencode(tostring(proc_name))
+        .. " args=" .. hexencode(tostring(proc_name) .. " " .. tostring(proc_args))
         .. " status=" .. (evt_rawarg_status or "nil")
+		.. " cwd=" .. (proc_cwd or "nil")
+		.. " uid=" .. (user_uid or "nil")
         .. " data=" .. hexencode(tostring(evt_rawarg_data))
-	.. " fd=" .. (fd_num or "nil")
+	    .. " fd=" .. (fd_num or "nil")
         .. " time=" .. evt_rawtime
     )
     

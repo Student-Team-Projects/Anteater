@@ -46,7 +46,8 @@ int SysdigProvider::init() {
             std::to_string(root_pid).c_str(),
             nullptr
         );
-        
+
+        SPDLOG_ERROR("Failed to start sysdig");
         return 1;
     }
 
@@ -67,7 +68,7 @@ int SysdigProvider::listen() {
     int err = 0;
     while (!exiting && (len = getline(&buffer, &buffer_size, sysdig_info)) != -1) {
         err = parse_and_push(buffer, len);
-	if (err != 0) stop();
+	    if (err != 0) stop();
     }
 
     if (err != 0) 
@@ -86,7 +87,7 @@ int SysdigProvider::parse_and_push(std::string line, ssize_t len) {
 
     size_t buf_len = 0;
     if (params["type"] == "EXECVE")
-        buf_len = params["name"].length();
+        buf_len = params["args"].length();
     else if (params["type"] == "WRITE")
         buf_len = params["data"].length();
 
@@ -116,24 +117,24 @@ int SysdigProvider::parse_and_push(std::string line, ssize_t len) {
 	    SPDLOG_WARN("Exit with nil status code! Using -1 value as fallback");
 	    pt->exit.code = -1;
 	} else {
-            /* Sysdig has a bug that prints status shifted 8 bits to the left
-	     * It probably will be fixed in the future so this code might stop working */
-            pt->exit.code = (stoi(params["status"]) >> 8);
+        /* Sysdig has a bug that prints status shifted 8 bits to the left
+         * It probably will be fixed in the future so this code might stop working */
+        pt->exit.code = (stoi(params["status"]) >> 8);
 	}
 	pt->event_type = EXIT;
     } else if (params["type"] == "WRITE") {
-	if (params["fd"] == "nil") {
-	    SPDLOG_WARN("Write with nil file descriptor! Provider will ignore this event and continue");
-	    return 0;
-	}
-	unsigned long fd = stoi(params["fd"]);
-	/* This behavior is different than we would like it.
-	 * We only want writes to STDOUT or STDERR, but 
-	 * this is not equivalent to checking whether 
-	 * fd is 1 or 2, e.g. after dup syscalls */
-	if (fd == 1) pt->write.stream = STDOUT;
-	else if (fd == 2) pt->write.stream = STDERR;
-	else return 0;
+        if (params["fd"] == "nil") {
+            SPDLOG_WARN("Write with nil file descriptor! Provider will ignore this event and continue");
+            return 0;
+        }
+        unsigned long fd = stoi(params["fd"]);
+        /* TODO: This behavior is different than we would like it.
+         *   We only want writes to STDOUT or STDERR, but 
+         *   this is not equivalent to checking whether 
+         *   fd is 1 or 2, e.g. after dup syscalls */
+        if (fd == 1) pt->write.stream = STDOUT;
+        else if (fd == 2) pt->write.stream = STDERR;
+        else return 0;
 
         pt->event_type = WRITE;
         pt->write.length = buf_len;
@@ -141,11 +142,12 @@ int SysdigProvider::parse_and_push(std::string line, ssize_t len) {
     } else if (params["type"] == "EXECVE") {
         pt->event_type = EXEC;
         pt->exec.length = buf_len;
-        memcpy(&pt->exec.data, params["name"].data(), buf_len);
+        pt->exec.uid = stoi(params["uid"]);        
+        memcpy(&pt->exec.data, params["args"].data(), buf_len);
     } else {
         SPDLOG_WARN("Unknown event type: " + params["type"] + 
-	    ". Provider will ignore this event and continue");
-	return 0;
+	        ". Provider will ignore this event and continue");
+	    return 0;
     }
 
     refs.push(event_ref(pt));

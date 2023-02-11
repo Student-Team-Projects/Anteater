@@ -1,4 +1,44 @@
-# Debugger2 - eBPF
+# Debugger2
+
+- [What is debugger2](#introduction)
+  - [Introduction](#introduction)
+  - [Architecture](#architecture)
+  - [Providers](#providers)
+    - [eBPF](#ebpf)
+    - [Sysdig](#sysdig)
+  - [Consumers](#consumers)
+  - [HTML printed logs](#html-printed-logs)
+- [How to use debugger2](#dependencies)
+  - [Dependencies](#dependencies)
+  - [Compilation and usage](#compilation-and-usage)
+  - [Alias](#alias)
+  - [Logs](#logs)
+  - [Help](#help)
+
+## Introduction
+
+## Architecture
+
+## Providers
+
+### eBPF
+
+### Sysdig
+
+There is a possibility to use [sysdig](https://sysdig.com/) as system events provider, though **it's not recommended**, as `ebpf` proved to be faster and more reliable.
+
+For dynamic event filtering with sysdig, a chisel script `proc_tree` us used. You can learn more about sysdig and chisels in links below.
+
+[sysdig wiki](https://github.com/annulen/sysdig-wiki)
+
+[sysdig github](https://github.com/draios/sysdig)
+
+[examples of chisels](https://github.com/draios/sysdig/tree/dev/userspace/sysdig/chisels)
+
+## Consumers
+
+## HTML printed logs
+
 
 ## Dependencies
 
@@ -8,7 +48,7 @@ On archlinux
 sudo pacman -Sy bpf clang compiler-rt llvm llvm-libs spdlog
 ```
 
-## Usage
+## Compilation and usage
 
 To compile run 
 
@@ -57,4 +97,12 @@ By default, debugger creates logs from every execution in `/temp/debugger/logs/l
 
 ```
 debugger -logp /path/to/logs/file.txt ...
+```
+
+## Help
+
+You can see help message with
+
+```
+debugger --help
 ```

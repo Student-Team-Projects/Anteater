@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
     sigprocmask(SIG_BLOCK, &sig_usr, &default_set);
 
     pid_t pid = fork();
-    if (!pid) {
+    if (!pid) {        
         struct sigaction resume;
         resume.sa_handler = [](int signal){};
         resume.sa_flags = 0;
@@ -87,7 +87,10 @@ int main(int argc, char **argv) {
         sigsuspend(&default_set);
         sigprocmask(SIG_SETMASK, &default_set, nullptr);
 
-        execvp(*argv, argv);
+        int err = execvp(*argv, argv);
+
+        SPDLOG_ERROR("Failed to exec into program to debug with error " 
+            + std::to_string(err));
         return 1;
     }
 
