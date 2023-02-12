@@ -45,7 +45,7 @@ For dynamic event filtering with sysdig, a chisel script `proc_tree` us used. Yo
 On archlinux
 
 ```
-sudo pacman -Sy bpf clang compiler-rt llvm llvm-libs spdlog
+sudo pacman -Sy bpf clang compiler-rt llvm llvm-libs spdlog tclap
 ```
 
 ## Compilation and usage
