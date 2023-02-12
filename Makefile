@@ -49,8 +49,11 @@ BPF_IFLAGS := $(patsubst %,-I%,$(BPF_INCLUDES))
 CLANG_BPF_SYS_INCLUDES = $(shell $(CLANG) -v -E - </dev/null 2>&1 \
 	| sed -n '/<...> search starts here:/,/End of search list./{ s| \(/.*\)|-idirafter \1|p }')
 
-.PHONY: all
+.PHONY: all clean chisel directories
 all: $(BIN)/$(MAIN)
+
+# create output directories the directories
+directories: $(OBJ) $(BIN)
 
 # cleanup
 .PHONY: clean
@@ -58,7 +61,6 @@ clean:
 	rm -rf $(OBJ) $(BIN)
 
 # installs chisel, so that sysdig can find it
-.PHONY: chisel
 chisel:
 	cp $(SRC)/$(CHISEL) $(CHISELDIR)
 
@@ -71,31 +73,31 @@ $(BIN):
 	mkdir -p $(BIN)
 
 # create vmlinux.h
-$(OBJ)/$(VMLINUX): | $(OBJ)
+$(OBJ)/$(VMLINUX): | directories
 	$(BPFTOOL) btf dump file /sys/kernel/btf/vmlinux format c > $@
 
 # Build BPF code
-$(BPF_OBJS): $(OBJ)/%.o: $(BPF_SRC)/%.c $(BPF_INCLUDES) $(OBJ)/$(VMLINUX) | $(OBJ)
+$(BPF_OBJS): $(OBJ)/%.o: $(BPF_SRC)/%.c $(OBJ)/$(VMLINUX) | directories
 	$(CLANG) -g -O3 -target bpf -D__TARGET_ARCH_$(ARCH) $(BPF_IFLAGS) $(CLANG_BPF_SYS_INCLUDES) -c $(filter %.c,$^) -o $@
 	$(LLVM_STRIP) -g $@ # strip useless DWARF info
 
 # Combine BPF objects
-$(OBJ)/$(BPF_TRACER): $(BPF_OBJS) | $(OBJ)
+$(OBJ)/$(BPF_TRACER): $(BPF_OBJS) | directories
 	$(BPFTOOL) gen object $@ $^
 
 # Generate BPF skeleton
-$(OBJ)/$(BPF_SKELETON): $(OBJ)/$(BPF_TRACER) | $(OBJ)
+$(OBJ)/$(BPF_SKELETON): $(OBJ)/$(BPF_TRACER) | directories
 	$(BPFTOOL) gen skeleton $< > $@
 
 # Add BPF skeleton to BPF provider dependencies
 $(OBJ)/bpf_provider.o: $(OBJ)/$(BPF_SKELETON)
 
 # Generic rule to create objects from cpp files
-$(OBJS): $(OBJ)/%.o: $(SRC)/%.cpp | $(OBJ)
+$(OBJS): $(OBJ)/%.o: $(SRC)/%.cpp | directories
 	$(CXX) $(CXXFLAGS) $(IFLAGS) -c $< -o $@
 
 # Build application binary
-$(BIN)/$(MAIN): $(OBJS) | $(BIN)
+$(BIN)/$(MAIN): $(OBJS) | directories
 	$(CXX) $(CXXFLAGS) $^ $(ALL_LDFLAGS) -lbpf -lelf -lfmt -lz -o $@
 
 # delete failed targets
