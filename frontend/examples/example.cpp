@@ -6,6 +6,11 @@
 #include <memory>
 #include <sys/types.h>
 #include <utility>
+#include <fstream>
+#include <sstream>
+#include <string>
+
+const std::string HTOP_OUTPUT_FILENAME = "examples/resources/htop.in";
 
 // (pid=1000, uid=0) "./sample_program arg1 arg2"
 //  |
@@ -26,12 +31,28 @@
 //  |
 // WRITE stdout "hello"
 //  |
+// WRITE stdout {output of htop (see resources/htop.in) containing ansi escape sequences}
+//  |
 // EXIT 0
+
+std::string readFileToString(const std::string filename) {
+  std::ifstream inputFile(filename);
+  if (!inputFile) {
+    fmt::print(stderr, "Failed to open {}, returning empty string", filename);
+    return "";
+  }
+
+  std::stringstream buffer;
+  buffer << inputFile.rdbuf();
+  return buffer.str();
+}
 
 void runExample(const std::filesystem::path &directory) {
     auto view_factory = std::make_unique<HtmlViewFactory>(directory, "index", "styles", true);
     auto presenter_factory = std::make_unique<PresenterFactory>(std::move(view_factory));
     auto main_presenter = presenter_factory->createMainPresenter();
+
+    std::string htop_output = readFileToString(HTOP_OUTPUT_FILENAME);
 
     pid_t root_pid = 1000;
     uid_t root_uid = 0;
@@ -49,6 +70,7 @@ void runExample(const std::filesystem::path &directory) {
     main_presenter->addExitEvent(timestamp += second, child_pid, 1);
     main_presenter->addExecEvent(timestamp += second, root_pid, child_uid, "/usr/bin/echo hello");
     main_presenter->addWriteEvent(timestamp += second, root_pid, "hello", true);
+    main_presenter->addWriteEvent(timestamp += second, root_pid, htop_output, true);
     main_presenter->addExitEvent(timestamp += second, root_pid, 0);
 }
 
