@@ -30,10 +30,8 @@
 #include "html/AnsiParser.h"
 
 #include <fmt/format.h>
-#include <errno.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
+#include <cstdlib>
+#include <string>
 
 //enables a hotfix for inputs using cursor manipulations like htop.
 // It's a hotfix and may not work for all such inputs
@@ -158,12 +156,6 @@ void deleteParse(pelem elem)
 		elem=temp;
 	}
 }
-
-enum ColorScheme {
-	SCHEME_WHITE,
-	SCHEME_BLACK,
-	SCHEME_PINK
-};
 
 int divide (int dividend, int divisor){
 	div_t result;
