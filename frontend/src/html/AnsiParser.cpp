@@ -35,7 +35,9 @@
 #include <stdio.h>
 #include <string.h>
 
-const bool HTOP_FIX = true;
+//enables a hotfix for inputs using cursor manipulations like htop.
+// It's a hotfix and may not work for all such inputs
+const bool LINE_BREAK_FIX = true;
 const bool IGNORE_CR = false;
 const char ansi_vt220_character_set[256][16] =
 {
@@ -580,7 +582,7 @@ std::string convert(std::string_view input)
 					}
 					break;
 					case 'H':
-						if (HTOP_FIX) //a little dirty ...
+						if (LINE_BREAK_FIX) //a little dirty ...
 						{
 							elem=parseInsert(buffer);
 							pelem second=elem->next;
@@ -597,7 +599,7 @@ std::string convert(std::string_view input)
 						}
 					break;
 				}
-				if (HTOP_FIX)
+				if (LINE_BREAK_FIX)
 					if (line_break)
 					{
 						for (;line<80;line++)
@@ -701,7 +703,7 @@ std::string convert(std::string_view input)
 			}
 		}
 		else
-		if (c==13 && HTOP_FIX)
+		if (c==13 && LINE_BREAK_FIX)
 		{
 			for (;line<80;line++)
 				fmt::format_to(iter," ");
