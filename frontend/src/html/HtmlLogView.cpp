@@ -1,5 +1,6 @@
 #include "html/HtmlLogView.h"
 #include "html/utils.h"
+#include "html/AnsiParser.h"
 #include <fmt/chrono.h>
 #include <fmt/ostream.h>
 #include <string>
@@ -106,10 +107,11 @@ std::string HtmlLogView::getId() {
 }
 
 void HtmlLogView::addLogEntry(time_point timestamp, std::string_view content, bool is_stdout) {
+    std::string parsed_content = convert(content);
     if (is_stdout) {
-        fmt::print(html_file_, LOG_STDOUT_FMT, fmt::arg("timestamp", timestamp), fmt::arg("content", content));
+        fmt::print(html_file_, LOG_STDOUT_FMT, fmt::arg("timestamp", timestamp), fmt::arg("content", parsed_content));
     } else {
-        fmt::print(html_file_, LOG_STDERR_FMT, fmt::arg("timestamp", timestamp), fmt::arg("content", content));
+        fmt::print(html_file_, LOG_STDERR_FMT, fmt::arg("timestamp", timestamp), fmt::arg("content", parsed_content));
     }
 }
 
