@@ -30,8 +30,6 @@
 #include "html/AnsiParser.h"
 
 #include <fmt/format.h>
-#include <cstdlib>
-#include <string>
 
 //enables a hotfix for inputs using cursor manipulations like htop.
 // It's a hotfix and may not work for all such inputs
