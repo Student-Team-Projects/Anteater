@@ -11,8 +11,11 @@
 #include <string>
 
 const std::string HTOP_OUTPUT_FILENAME = "examples/resources/htop.in";
+const std::string RAINBOW_FILENAME = "examples/resources/rainbow.in";
+const auto SECOND = std::chrono::seconds(1);
 
-// (pid=1000, uid=0) "./sample_program arg1 arg2"
+
+// (pid=1000, uid=0) "./fork_example arg1 arg2"
 //  |
 // WRITE stdout "Hello, stdout!"
 //  |
@@ -31,8 +34,6 @@ const std::string HTOP_OUTPUT_FILENAME = "examples/resources/htop.in";
 //  |
 // WRITE stdout "hello"
 //  |
-// WRITE stdout {output of htop (see resources/htop.in) containing ansi escape sequences}
-//  |
 // EXIT 0
 
 std::string readFileToString(const std::string filename) {
@@ -46,32 +47,53 @@ std::string readFileToString(const std::string filename) {
   buffer << inputFile.rdbuf();
   return buffer.str();
 }
+void addForkCapture(const std::unique_ptr<MainPresenter>& main_presenter, pid_t root_pid, uid_t root_uid, pid_t child_pid, uid_t child_uid){
+    auto timestamp = std::chrono::system_clock::now();
 
-void runExample(const std::filesystem::path &directory) {
+    main_presenter->addCapture(timestamp, root_pid, root_uid, "./fork_example arg1 arg2");
+    main_presenter->addWriteEvent(timestamp += SECOND, root_pid, "Hello, stdout!", true);
+    main_presenter->addWriteEvent(timestamp += SECOND, root_pid, "Hello, stderr!", false);
+    main_presenter->addForkEvent(timestamp += SECOND, root_pid, child_pid);
+    main_presenter->addExecEvent(timestamp += SECOND, child_pid, child_uid, "/usr/bin/ls /path");
+    main_presenter->addWriteEvent(timestamp += SECOND, child_pid, "/usr/bin/ls: cannot access '/path'", false);
+    main_presenter->addExitEvent(timestamp += SECOND, child_pid, 1);
+    main_presenter->addExecEvent(timestamp += SECOND, root_pid, child_uid, "/usr/bin/echo hello");
+    main_presenter->addWriteEvent(timestamp += SECOND, root_pid, "hello", true);
+    main_presenter->addExitEvent(timestamp += SECOND, root_pid, 0);
+
+}
+void addHtopCapture(const std::unique_ptr<MainPresenter>& main_presenter, pid_t root_pid, uid_t root_uid, pid_t child_pid, uid_t child_uid){
+    auto timestamp = std::chrono::system_clock::now();
+    std::string htop_output = readFileToString(HTOP_OUTPUT_FILENAME);
+
+    main_presenter->addCapture(timestamp, root_pid, root_uid, "./htop_example");
+    main_presenter->addWriteEvent(timestamp += SECOND, root_pid, htop_output, true);
+    main_presenter->addExitEvent(timestamp += SECOND, root_pid, 0);
+
+}
+
+void addRainbowCapture(const std::unique_ptr<MainPresenter>& main_presenter, pid_t root_pid, uid_t root_uid, pid_t child_pid, uid_t child_uid){
+    auto timestamp = std::chrono::system_clock::now();
+    std::string rainbow = readFileToString(RAINBOW_FILENAME);
+
+    main_presenter->addCapture(timestamp, root_pid, root_uid, "./rainbow_example");
+    main_presenter->addWriteEvent(timestamp += SECOND, root_pid, rainbow, true);
+    main_presenter->addExitEvent(timestamp += SECOND, root_pid, 0);
+}
+
+void runExamples(const std::filesystem::path &directory) {
     auto view_factory = std::make_unique<HtmlViewFactory>(directory, "index", "styles", true);
     auto presenter_factory = std::make_unique<PresenterFactory>(std::move(view_factory));
     auto main_presenter = presenter_factory->createMainPresenter();
-
-    std::string htop_output = readFileToString(HTOP_OUTPUT_FILENAME);
 
     pid_t root_pid = 1000;
     uid_t root_uid = 0;
     pid_t child_pid = 2000;
     uid_t child_uid = 1;
-    auto timestamp = std::chrono::system_clock::now();
-    auto second = std::chrono::seconds(1);
 
-    main_presenter->addCapture(timestamp, root_pid, root_uid, "./sample_program arg1 arg2");
-    main_presenter->addWriteEvent(timestamp += second, root_pid, "Hello, stdout!", true);
-    main_presenter->addWriteEvent(timestamp += second, root_pid, "Hello, stderr!", false);
-    main_presenter->addForkEvent(timestamp += second, root_pid, child_pid);
-    main_presenter->addExecEvent(timestamp += second, child_pid, child_uid, "/usr/bin/ls /path");
-    main_presenter->addWriteEvent(timestamp += second, child_pid, "/usr/bin/ls: cannot access '/path'", false);
-    main_presenter->addExitEvent(timestamp += second, child_pid, 1);
-    main_presenter->addExecEvent(timestamp += second, root_pid, child_uid, "/usr/bin/echo hello");
-    main_presenter->addWriteEvent(timestamp += second, root_pid, "hello", true);
-    main_presenter->addWriteEvent(timestamp += second, root_pid, htop_output, true);
-    main_presenter->addExitEvent(timestamp += second, root_pid, 0);
+    addForkCapture(main_presenter, root_pid, root_uid, child_pid, child_uid);
+    addHtopCapture(main_presenter, root_pid, root_uid, child_pid, child_uid);
+    addRainbowCapture(main_presenter, root_pid, root_uid, child_pid, child_uid);
 }
 
 int main(int argc, char *argv[]) {
@@ -84,6 +106,6 @@ int main(int argc, char *argv[]) {
         fmt::print(stderr, "{} is not a valid directory\n", output_dir);
         return 1;
     }
-    runExample(output_dir);
+    runExamples(output_dir);
     return 0;
 }
