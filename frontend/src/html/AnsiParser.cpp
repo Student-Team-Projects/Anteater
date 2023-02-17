@@ -178,7 +178,7 @@ void make_rgb (int color_id, char str_rgb[12]){
 	{
 		int index = color_id - 232;
 		int grey = index * 256 / 24;
-		sprintf(str_rgb, "%02x%02x%02x", grey, grey, grey);
+		fmt::format_to(str_rgb, "{:02x}{:02x}{:02x}", grey, grey, grey);
 		return;
 	}
 	int index_R = divide((color_id - 16), 36);
