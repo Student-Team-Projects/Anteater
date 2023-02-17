@@ -204,7 +204,7 @@ void make_rgb (int color_id, char str_rgb[12]){
 	} else {
 		rgb_B = 0;
 	}
-	sprintf(str_rgb, "%02x%02x%02x", rgb_R, rgb_G, rgb_B);
+	fmt::format_to(str_rgb, "{:02x}{:02x}{:02x}", rgb_R, rgb_G, rgb_B);
 }
 
 enum ColorMode {
