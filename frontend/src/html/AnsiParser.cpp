@@ -1,14 +1,10 @@
 /*
-NOTICE: MODIFIED CODE BASED ON LGPL-LICENSED SOURCE CODE
+ This file is a modified version of source code published under the GNU Lesser General Public License (LGPL) version 2.
+ This modified code is licensed under the GNU General Public License (GPL) version 3 or later.
 
-This file contains code that is a modification of source code published under the Lesser General Public License (LGPL) version 3.0 or later.
-The original source code can be found at https://github.com/theZiz/aha.
-
-This modified code is also licensed under the terms of the LGPL version 3.0 or later. 
-You are free to use, distribute, and modify this code in compliance with the terms of the LGPL license.
-
-By using, distributing, or modifying this code, you agree to be bound by the terms of the LGPL license.
-If you do not agree to these terms, you must cease using, distributing, and modifying this code.
+ This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+ without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ See the GNU General Public License for more details.
 */
 
 /*
@@ -736,29 +732,23 @@ std::string convert(std::string_view input)
 				}
 				newline=-1;
 			}
-			//I want fall-through, so I ignore the gcc warning for this switch
-			#if defined(__GNUC__) && __GNUC__ >= 5
-			#pragma GCC diagnostic push
-			#pragma GCC diagnostic ignored "-Wimplicit-fallthrough="
-			#endif
 			switch (c)
 			{
 				case '&':	fmt::format_to(iter,"&amp;"); break;
 				case '\"':	fmt::format_to(iter,"&quot;"); break;
 				case '<':	fmt::format_to(iter,"&lt;"); break;
 				case '>':	fmt::format_to(iter,"&gt;"); break;
-				case '\n':case 13:
+				case '\n':
+				case 13:
 					momline++;
 					line=0;
+					[[fallthrough]];
 				default:
 					if (special_char)
 						fmt::format_to(iter, "{}", ansi_vt220_character_set[((int)c+32) & 255]);
 					else
 						fmt::format_to(iter,"{:c}",c);
 			}
-			#if defined(__GNUC__) && __GNUC__ >= 5
-			#pragma GCC diagnostic pop
-			#endif
 		}
 	}
 	// If current state is different than the default, there is a <span> open - close it
