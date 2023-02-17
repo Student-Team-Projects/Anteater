@@ -3,17 +3,27 @@
 #include <chrono>
 #include <filesystem>
 #include <fmt/core.h>
-#include <memory>
-#include <sys/types.h>
-#include <utility>
 #include <fstream>
+#include <memory>
 #include <sstream>
 #include <string>
+#include <sys/types.h>
+#include <utility>
 
-const std::string HTOP_OUTPUT_FILENAME = "examples/resources/htop.in";
-const std::string RAINBOW_FILENAME = "examples/resources/rainbow.in";
+const std::filesystem::path HTOP_OUTPUT_FILENAME = "examples/resources/htop.in";
+const std::filesystem::path RAINBOW_FILENAME = "examples/resources/rainbow.in";
 const auto SECOND = std::chrono::seconds(1);
 
+std::string readFileToString(const std::filesystem::path &file) {
+    std::ifstream inputFile(file);
+    if (!inputFile) {
+        fmt::print(stderr, "Failed to open {}, returning empty string", file.string());
+        return "";
+    }
+    std::stringstream buffer;
+    buffer << inputFile.rdbuf();
+    return buffer.str();
+}
 
 // (pid=1000, uid=0) "./fork_example arg1 arg2"
 //  |
@@ -35,20 +45,12 @@ const auto SECOND = std::chrono::seconds(1);
 // WRITE stdout "hello"
 //  |
 // EXIT 0
-
-std::string readFileToString(const std::string filename) {
-  std::ifstream inputFile(filename);
-  if (!inputFile) {
-    fmt::print(stderr, "Failed to open {}, returning empty string", filename);
-    return "";
-  }
-
-  std::stringstream buffer;
-  buffer << inputFile.rdbuf();
-  return buffer.str();
-}
-void addForkCapture(const std::unique_ptr<MainPresenter>& main_presenter, pid_t root_pid, uid_t root_uid, pid_t child_pid, uid_t child_uid){
+void addForkCapture(const std::unique_ptr<MainPresenter> &main_presenter) {
     auto timestamp = std::chrono::system_clock::now();
+    pid_t root_pid = 1000;
+    uid_t root_uid = 0;
+    pid_t child_pid = 2000;
+    uid_t child_uid = 1;
 
     main_presenter->addCapture(timestamp, root_pid, root_uid, "./fork_example arg1 arg2");
     main_presenter->addWriteEvent(timestamp += SECOND, root_pid, "Hello, stdout!", true);
@@ -60,25 +62,28 @@ void addForkCapture(const std::unique_ptr<MainPresenter>& main_presenter, pid_t 
     main_presenter->addExecEvent(timestamp += SECOND, root_pid, child_uid, "/usr/bin/echo hello");
     main_presenter->addWriteEvent(timestamp += SECOND, root_pid, "hello", true);
     main_presenter->addExitEvent(timestamp += SECOND, root_pid, 0);
-
 }
-void addHtopCapture(const std::unique_ptr<MainPresenter>& main_presenter, pid_t root_pid, uid_t root_uid, pid_t child_pid, uid_t child_uid){
+
+void addHtopCapture(const std::unique_ptr<MainPresenter> &main_presenter) {
     auto timestamp = std::chrono::system_clock::now();
+    pid_t pid = 1000;
+    uid_t uid = 0;
     std::string htop_output = readFileToString(HTOP_OUTPUT_FILENAME);
 
-    main_presenter->addCapture(timestamp, root_pid, root_uid, "./htop_example");
-    main_presenter->addWriteEvent(timestamp += SECOND, root_pid, htop_output, true);
-    main_presenter->addExitEvent(timestamp += SECOND, root_pid, 0);
-
+    main_presenter->addCapture(timestamp, pid, uid, "./htop_example");
+    main_presenter->addWriteEvent(timestamp += SECOND, pid, htop_output, true);
+    main_presenter->addExitEvent(timestamp += SECOND, pid, 0);
 }
 
-void addRainbowCapture(const std::unique_ptr<MainPresenter>& main_presenter, pid_t root_pid, uid_t root_uid, pid_t child_pid, uid_t child_uid){
+void addRainbowCapture(const std::unique_ptr<MainPresenter> &main_presenter) {
     auto timestamp = std::chrono::system_clock::now();
+    pid_t pid = 1000;
+    uid_t uid = 0;
     std::string rainbow = readFileToString(RAINBOW_FILENAME);
 
-    main_presenter->addCapture(timestamp, root_pid, root_uid, "./rainbow_example");
-    main_presenter->addWriteEvent(timestamp += SECOND, root_pid, rainbow, true);
-    main_presenter->addExitEvent(timestamp += SECOND, root_pid, 0);
+    main_presenter->addCapture(timestamp, pid, uid, "./rainbow_example");
+    main_presenter->addWriteEvent(timestamp += SECOND, pid, rainbow, true);
+    main_presenter->addExitEvent(timestamp += SECOND, pid, 0);
 }
 
 void runExamples(const std::filesystem::path &directory) {
@@ -86,14 +91,9 @@ void runExamples(const std::filesystem::path &directory) {
     auto presenter_factory = std::make_unique<PresenterFactory>(std::move(view_factory));
     auto main_presenter = presenter_factory->createMainPresenter();
 
-    pid_t root_pid = 1000;
-    uid_t root_uid = 0;
-    pid_t child_pid = 2000;
-    uid_t child_uid = 1;
-
-    addForkCapture(main_presenter, root_pid, root_uid, child_pid, child_uid);
-    addHtopCapture(main_presenter, root_pid, root_uid, child_pid, child_uid);
-    addRainbowCapture(main_presenter, root_pid, root_uid, child_pid, child_uid);
+    addForkCapture(main_presenter);
+    addHtopCapture(main_presenter);
+    addRainbowCapture(main_presenter);
 }
 
 int main(int argc, char *argv[]) {
