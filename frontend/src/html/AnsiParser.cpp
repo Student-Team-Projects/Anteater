@@ -605,13 +605,10 @@ std::string convert(std::string_view input)
 						for (;line<80;line++)
 							fmt::format_to(iter," ");
 					}
-				//Checking the differences
 				if ( statesDiffer(&state, &oldstate) ) //ANY Change
 				{
-					// If old state was different than the default one, close the current <span>
 					if (statesDiffer(&oldstate, &default_state))
 						fmt::format_to(iter,"</span>");
-					// Open new <span> if current state differs from the default one
 					if (statesDiffer(&state, &default_state))
 					{
 						fmt::format_to(iter,"<span style=\"");
@@ -753,7 +750,6 @@ std::string convert(std::string_view input)
 			}
 		}
 	}
-	// If current state is different than the default, there is a <span> open - close it
 	if (statesDiffer(&state, &default_state))
 		fmt::format_to(iter,"</span>");
 	return fmt::to_string(buf);
