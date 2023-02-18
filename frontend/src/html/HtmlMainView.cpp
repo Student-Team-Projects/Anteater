@@ -102,7 +102,7 @@ h2 {
 }
 
 .log.write {
-  white-space: pre-line;
+  white-space: pre-wrap;
 }
 
 .log.write.stderr {
