@@ -28,8 +28,9 @@
  Alexander Matthes (Ziz) , ziz_at_mailbox.org
 */
 #include "html/AnsiParser.h"
-
+#include <cassert>
 #include <fmt/format.h>
+#include <string>
 
 //enables a hotfix for inputs using cursor manipulations like htop.
 // It's a hotfix and may not work for all such inputs
@@ -155,46 +156,23 @@ void deleteParse(pelem elem)
 	}
 }
 
-int divide (int dividend, int divisor){
-	div_t result;
-	result = div (dividend, divisor);
-	return result.quot;
-}
-
-void make_rgb (int color_id, char str_rgb[12]){
-	if (color_id < 16 || color_id > 255)
-		return;
+std::string make_rgb (int color_id){
+	assert(color_id >= 16 && color_id <= 255);
 	if (color_id >= 232)
 	{
+		// color_id is encoded as 232 + c, where c is in [0, 23]
 		int index = color_id - 232;
-		int grey = index * 256 / 24;
-		fmt::format_to(str_rgb, "{:02x}{:02x}{:02x}", grey, grey, grey);
-		return;
+		int grey = index * 255 / 23;
+		return fmt::format("{:02x}{:02x}{:02x}", grey, grey, grey);
 	}
-	int index_R = divide((color_id - 16), 36);
-	int rgb_R;
-	if (index_R > 0){
-		rgb_R = 55 + index_R * 40;
-	} else {
-		rgb_R = 0;
-	}
-
-	int index_G = divide(((color_id - 16) % 36), 6);
-	int rgb_G;
-	if (index_G > 0){
-		rgb_G = 55 + index_G * 40;
-	} else {
-		rgb_G = 0;
-	}
-
-	int index_B = ((color_id - 16) % 6);
-	int rgb_B;
-	if (index_B > 0){
-		rgb_B = 55 + index_B * 40;
-	} else {
-		rgb_B = 0;
-	}
-	fmt::format_to(str_rgb, "{:02x}{:02x}{:02x}", rgb_R, rgb_G, rgb_B);
+	// color_id is encoded as 16 + 36 * r + 6 * g + b, where r, g, b are in [0, 5]
+	int index = color_id - 16;
+	int b = (index % 6) * 255 / 5;
+	index /= 6;
+	int g = (index % 6) * 255 / 5;
+	index /= 6;
+	int r = index * 255 / 5;
+	return fmt::format("{:02x}{:02x}{:02x}", r, g, b);
 }
 
 enum ColorMode {
@@ -636,9 +614,7 @@ std::string convert(std::string_view input)
 									fmt::format_to(iter, fmt::runtime(fcstyle[state.fc]));
 								else
 								{
-									char rgb[12];
-									make_rgb(state.fc,rgb);
-									fmt::format_to(iter,"color:#{};",rgb);
+									fmt::format_to(iter,"color:#{};", make_rgb(state.fc));
 								}
 								break;
 							case MODE_24BIT:
@@ -655,9 +631,7 @@ std::string convert(std::string_view input)
 									fmt::format_to(iter, fmt::runtime(bcstyle[state.bc]));
 								else
 								{
-									char rgb[12];
-									make_rgb(state.bc,rgb);
-									fmt::format_to(iter,"background-color:#{};",rgb);
+									fmt::format_to(iter,"background-color:#{};", make_rgb(state.bc));
 								}
 								break;
 							case MODE_24BIT:
