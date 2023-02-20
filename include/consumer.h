@@ -1,21 +1,16 @@
 #pragma once
 
-#include "provider.h"
-
 #include <iostream>
 
+#include "event.h"
+#include "provider.h"
+
 class Consumer {
-    pid_t root_pid;
-    volatile bool exiting = false;
-    bool hex_input;
+public:
+    /* Starts consuming events provided by provider */
+    virtual int start(Provider &provider, pid_t root_pid, bool hex_input) = 0;
+    /* Forces gentle stop of consuming */
+    virtual void stop() = 0;
 
-  public:
-    Consumer(pid_t root_pid);
-
-    void consume(Provider &provider);
-    void start(Provider &provider, bool hex_input) { 
-      this->hex_input = hex_input;
-      while (!exiting) consume(provider); 
-    };
-    void stop();
+    virtual ~Consumer() {}
 };
