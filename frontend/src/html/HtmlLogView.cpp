@@ -1,5 +1,6 @@
 #include "html/HtmlLogView.h"
 #include "html/utils.h"
+#include "html/AnsiParser.h"
 #include <fmt/chrono.h>
 #include <fmt/ostream.h>
 #include <string>
@@ -36,18 +37,10 @@ constexpr char HTML_HEADER_FMT[] = R"(
     <table>
 )";
 
-constexpr char LOG_STDOUT_FMT[] = R"(
+constexpr char LOG_FMT[] = R"(
       <tr>
         <td class="timestamp">{timestamp}</td>
-        <td class="log write stdout"><em>{content}</em></td>
-      </tr>
-)";
-
-// The Lynx browser displays text inside <strong> tags in red.
-constexpr char LOG_STDERR_FMT[] = R"(
-      <tr>
-        <td class="timestamp">{timestamp}</td>
-        <td class="log write stderr"><em><strong>{content}</strong></em></td>
+        <td class="log write {stream_class}">{content}</td>
       </tr>
 )";
 
@@ -106,11 +99,11 @@ std::string HtmlLogView::getId() {
 }
 
 void HtmlLogView::addLogEntry(time_point timestamp, std::string_view content, bool is_stdout) {
-    if (is_stdout) {
-        fmt::print(html_file_, LOG_STDOUT_FMT, fmt::arg("timestamp", timestamp), fmt::arg("content", content));
-    } else {
-        fmt::print(html_file_, LOG_STDERR_FMT, fmt::arg("timestamp", timestamp), fmt::arg("content", content));
-    }
+    fmt::print(html_file_, LOG_FMT,
+               fmt::arg("timestamp", timestamp),
+               fmt::arg("content", convert(content)),
+               fmt::arg("stream_class", is_stdout ? "stdout" : "stderr")
+    );
 }
 
 void HtmlLogView::linkSubpage(time_point timestamp, std::string_view subpage_id, uid_t uid, std::string_view command) {

@@ -101,6 +101,10 @@ h2 {
   white-space: nowrap;
 }
 
+.log.write {
+  white-space: pre-wrap;
+}
+
 .log.write.stderr {
   color: var(--color-stderr);
 }
