@@ -21,7 +21,7 @@ class BPFProvider : public Provider {
     volatile bool exiting = false;
 
   public:
-    BPFProvider(pid_t root_pid, size_t capacity = DEFAULT_QUEUE_CAPACITY, bool verbose = false);
+    BPFProvider(pid_t root_pid, size_t capacity = DEFAULT_QUEUE_CAPACITY);
     
     event_ref provide() override;
     int start() override;

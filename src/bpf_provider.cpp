@@ -6,29 +6,44 @@
 #include <sys/stat.h>
 
 #include <csignal>
+#include <cstdarg>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <ostream>
+#include <string>
+
+#include "fmt/format.h"
+#include "spdlog/spdlog.h"
 
 #include "constants.h"
 #include "event.h"
 
 #include "tracer.skel.h"
 
-static int verbose_libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args) {
-    return vfprintf(stderr, format, args);
-}
-
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args) {
-    if (level == LIBBPF_DEBUG)
-        return 0;
-    return vfprintf(stderr, format, args);
+    va_list args_cpy;
+    va_copy(args_cpy, args);
+    std::vector<char> buf(1+std::vsnprintf(nullptr, 0, format, args_cpy));
+    va_end(args_cpy);
+    std::vsnprintf(buf.data(), buf.size(), format, args);
+    switch (level) {
+        case LIBBPF_WARN:
+            SPDLOG_WARN(buf.data());
+            return 0;
+        case LIBBPF_DEBUG:
+            SPDLOG_DEBUG(buf.data());
+            return 0;
+        default:
+            SPDLOG_INFO(buf.data());
+    }
+    return 0;
 }
 
-BPFProvider::BPFProvider(pid_t root_pid, size_t capacity, bool verbose) : refs(capacity), root_pid(root_pid){
+BPFProvider::BPFProvider(pid_t root_pid, size_t capacity) : refs(capacity), root_pid(root_pid){
     /* Set up libbpf errors and debug info callback */
     libbpf_set_strict_mode(LIBBPF_STRICT_ALL);
-    libbpf_set_print(verbose ? verbose_libbpf_print_fn : libbpf_print_fn);
+    libbpf_set_print(libbpf_print_fn);
 }
 
 int handle_event(void *ctx, void *data, size_t data_sz) {
@@ -47,7 +62,7 @@ int BPFProvider::init() {
     // Load and verify BPF application
     skel = tracer_bpf__open();
     if (!skel) {
-        fprintf(stderr, "Failed to open and load BPF skeleton\n");
+        SPDLOG_ERROR("Failed to open and load BPF skeleton\n");
         return 1;
     }
     
@@ -57,7 +72,7 @@ int BPFProvider::init() {
     struct stat kernel_proc_entry;
     err = stat("/proc/1", &kernel_proc_entry);
     if (err) {
-        fprintf(stderr, "Failed to fetch last boot time\n");
+        SPDLOG_ERROR("Failed to fetch last boot time\n");
         return cleanup(err);
     }
     skel->rodata->boot_time = kernel_proc_entry.st_ctim.tv_sec * (uint64_t) 1'000'000'000 + kernel_proc_entry.st_ctim.tv_nsec;
@@ -65,35 +80,35 @@ int BPFProvider::init() {
     // create per-cpu auxiliary maps
     err = bpf_map__set_max_entries(skel->maps.aux_maps, get_nprocs());
     if (err) {
-        fprintf(stderr, "Failed to make per-cpu auxiliary maps\n");
+        SPDLOG_ERROR("Failed to make per-cpu auxiliary maps\n");
         return cleanup(err);
     }
     
     // Load and verify BPF programs
     err = tracer_bpf__load(skel);
     if (err) {
-        fprintf(stderr, "Failed to load and verify BPF skeleton\n");
+        SPDLOG_ERROR("Failed to load and verify BPF skeleton\n");
         return cleanup(err);
     }
 
     // Parametrize BPF code with root process PID
     err = bpf_map__update_elem(skel->maps.pid_tree, &root_pid, sizeof(pid_t), &root_pid, sizeof(pid_t), BPF_ANY);
     if (err) {
-        fprintf(stderr, "Failed to initialize root pid in BPF program\n");
+        SPDLOG_ERROR("Failed to initialize root pid in BPF program\n");
         return cleanup(err);
     }
 
     // Attach tracepoints
     err = tracer_bpf__attach(skel);
     if (err) {
-        fprintf(stderr, "Failed to attach BPF skeleton\n");
+        SPDLOG_ERROR("Failed to attach BPF skeleton\n");
         return cleanup(err);
     }
 
     // Set up ring buffer polling
     rb = ring_buffer__new(bpf_map__fd(skel->maps.rb), handle_event, this, NULL);
     if (!rb) {
-        fprintf(stderr, "Failed to create ring buffer\n");
+        SPDLOG_ERROR("Failed to create ring buffer\n");
         return cleanup(-1);
     }
     return 0;
@@ -109,7 +124,7 @@ int BPFProvider::listen() {
         if (err == -EINTR)
             return cleanup(0);
         if (err < 0) {
-            fprintf(stderr, "Error polling buffer: %d\n", err);
+            SPDLOG_ERROR("Error polling buffer: %d\n", err);
             return cleanup(err);
         }
     }
