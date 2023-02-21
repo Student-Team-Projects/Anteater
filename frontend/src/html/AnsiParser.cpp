@@ -76,8 +76,7 @@ int getNextChar(std::string_view s, size_t &i)
 {
 	if(i<s.size())
 		return s[i++];
-	perror("Error while parsing input");
-	exit(EXIT_FAILURE);
+	return EOF;
 }
 
 typedef struct selem *pelem;
@@ -274,7 +273,6 @@ std::string convert(std::string_view input)
 	int negative = 0; //No negative image
 	int special_char = 0; //No special characters
 	int line=0;
-	int momline=0;
 	int newline=-1;
 	size_t i=0;
 	int line_break=0;
@@ -291,7 +289,7 @@ std::string convert(std::string_view input)
 				char buffer[1024];
 				buffer[0] = '[';
 				int counter=1;
-				while ((c<'A') || ((c>'Z') && (c<'a')) || (c>'z'))
+				while (((c<'A') || ((c>'Z') && (c<'a')) || (c>'z')) && c!=EOF)
 				{
 					c=getNextChar(input, i);
 					buffer[counter]=c;
@@ -645,7 +643,7 @@ std::string convert(std::string_view input)
 			else
 			if ( c == ']' ) //Operating System Command (OSC), ignoring for now
 			{
-				while (c != 2 && c != 7 && c!= 27) //STX, BEL or ESC end an OSC.
+				while (c != 2 && c != 7 && c!= 27 && c!=EOF) //STX, BEL or ESC end an OSC.
 					c = getNextChar(input, i);
 				if ( c == 27 ) // expecting \ after ESC
 					c = getNextChar(input, i);
@@ -669,7 +667,6 @@ std::string convert(std::string_view input)
 			for (;line<80;line++)
 				fmt::format_to(iter," ");
 			line=0;
-			momline++;
 			fmt::format_to(iter,"\n");
 		}
 		else
@@ -684,7 +681,6 @@ std::string convert(std::string_view input)
 				fmt::format_to(iter,"\n");
 				line=0;
 				line_break=0;
-				momline++;
 			}
 			if (newline>=0)
 			{
@@ -703,7 +699,6 @@ std::string convert(std::string_view input)
 				case '>':	fmt::format_to(iter,"&gt;"); break;
 				case '\n':
 				case 13:
-					momline++;
 					line=0;
 					[[fallthrough]];
 				default:
