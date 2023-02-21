@@ -14,7 +14,10 @@ int HtmlConsumer::start(Provider &provider, pid_t root_pid, bool hex_input) {
     this->root_pid = root_pid;
     this->hex_input = hex_input;
 
-    const std::filesystem::path directory = "./html/";
+    const std::filesystem::path directory = getenv("HOME") + std::string("/debugger");
+    if (!std::filesystem::create_directory(directory)) {
+        SPDLOG_ERROR(fmt::format("Error creating directory {}", directory.c_str()));
+    }
     this->view_factory = std::make_unique<HtmlViewFactory>(directory, "index", "styles", true);
     this->presenter_factory = std::make_unique<PresenterFactory>(std::move(view_factory));
     this->main_presenter = presenter_factory->createMainPresenter();
@@ -46,6 +49,22 @@ int HtmlConsumer::consume(Provider &provider) {
 
     auto timestamp = toSystemClockTimePoint(event->timestamp);
 
+    if(!capture_added){
+        if(event->event_type != EXEC){
+            SPDLOG_ERROR("Expected EXEC as first event. Exiting...");
+            stop();
+            return 1;
+        }
+        convert_spaces(event->exec.data, event->exec.length);
+        main_presenter->addCapture(
+            timestamp,
+            event->pid,
+            event->exec.uid,
+            std::string(event->exec.data, event->exec.length));
+        capture_added=true;
+        return 0;
+    }
+
     switch (event->event_type) {
         case FORK:
             main_presenter->addForkEvent(timestamp, event->pid, event->fork.child_pid);
@@ -66,6 +85,7 @@ int HtmlConsumer::consume(Provider &provider) {
             );
             return 0;
         case EXEC:
+            convert_spaces(event->exec.data, event->exec.length);
             main_presenter->addExecEvent(
                 timestamp,
                 event->pid,

@@ -13,6 +13,7 @@ class HtmlConsumer : public Consumer {
     pid_t root_pid;
     volatile bool exiting = false;
     bool hex_input;
+    bool capture_added = false;
 
     /* Objects from frontend module */
     std::unique_ptr<HtmlViewFactory> view_factory;
