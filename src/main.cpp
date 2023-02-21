@@ -5,6 +5,7 @@
 #include <functional>
 #include <iostream>
 #include <pwd.h>
+#include <grp.h>
 
 #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 #include "spdlog/spdlog.h"
@@ -82,6 +83,8 @@ int main(int argc, const char **argv) {
         sigprocmask(SIG_BLOCK, &sig_usr, &default_set);
 
         uid_t prog_uid = 0;
+        gid_t grps[NGROUPS_MAX];
+        int grp_cnt = NGROUPS_MAX;
 
         if (userArg.isSet()) {
             passwd *pwd = getpwnam(userArg.getValue().c_str());
@@ -90,6 +93,7 @@ int main(int argc, const char **argv) {
                 return 1;    
             }
             prog_uid = pwd->pw_uid;
+            getgrouplist(userArg.getValue().c_str(), pwd->pw_gid, grps, &grp_cnt);
         }
 
         // Fork to run child and tracer
@@ -101,6 +105,7 @@ int main(int argc, const char **argv) {
             sigaction(SIGUSR1, &resume, nullptr);
 
             if (prog_uid) {
+                setgroups(grp_cnt, grps);
                 setuid(prog_uid);
                 SPDLOG_INFO("Setting UID for program to " + std::to_string(prog_uid) + " (" + userArg.getValue() + ")");
             }
