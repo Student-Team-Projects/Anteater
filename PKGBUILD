@@ -16,11 +16,11 @@ md5sums=("SKIP")
 noextract=()
 
 build() {
-	cd "$pkgname-main"
+	cd "$pkgname-$pkgver"
 	make
 }
 
 package() {
-	cd "$pkgname-main"
+	cd "$pkgname-$pkgver"
 	make DESTDIR="$pkgdir" PKGNAME="$pkgname" install
 }
