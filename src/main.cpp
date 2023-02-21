@@ -71,6 +71,7 @@ int main(int argc, const char **argv) {
         // Setting up logs using spdlog library from https://github.com/gabime/spdlog    
         auto logger = spdlog::basic_logger_mt("file_logger", logDirArg.getValue());
         spdlog::set_default_logger(logger);
+        spdlog::flush_every(std::chrono::seconds(3));
         spdlog::set_pattern("[%d/%m/%Y %T%z][%-20!s:%-4!# %-10!!][%-5!l] %v");
 
         SPDLOG_INFO("Starting debugger execution");
