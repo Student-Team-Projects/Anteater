@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <unordered_set>
 
 #include "consumer.h"
 #include "provider.h"
@@ -14,6 +15,7 @@ class HtmlConsumer : public Consumer {
     volatile bool exiting = false;
     bool hex_input;
     bool capture_added = false;
+    std::unordered_set<pid_t> running_processes;
 
     /* Objects from frontend module */
     std::unique_ptr<HtmlViewFactory> view_factory;

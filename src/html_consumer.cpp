@@ -5,6 +5,7 @@
 
 #include <chrono>
 #include <cstdio>
+#include <unordered_set>
 
 #include "html/HtmlViewFactory.h"
 #include "presentation/MainPresenter.h"
@@ -13,9 +14,12 @@
 int HtmlConsumer::start(Provider &provider, pid_t root_pid, bool hex_input) {
     this->root_pid = root_pid;
     this->hex_input = hex_input;
+    running_processes.insert(root_pid);
 
-    const std::filesystem::path directory =  "/var/lib/debugger";
-    std::filesystem::create_directory(directory);
+    const std::filesystem::path directory = getenv("HOME") + std::string("/debugger");
+    if (!std::filesystem::create_directory(directory)) {
+        SPDLOG_ERROR(fmt::format("Error creating directory {}", directory.c_str()));
+    }
     this->view_factory = std::make_unique<HtmlViewFactory>(directory, "index", "styles", true);
     this->presenter_factory = std::make_unique<PresenterFactory>(std::move(view_factory));
     this->main_presenter = presenter_factory->createMainPresenter();
@@ -48,7 +52,7 @@ int HtmlConsumer::consume(Provider &provider) {
     auto timestamp = toSystemClockTimePoint(event->timestamp);
 
     if(!capture_added){
-        if(event->event_type != EXEC){
+        if(event->event_type != EXEC) {
             SPDLOG_ERROR("Expected EXEC as first event. Exiting...");
             stop();
             return 1;
@@ -65,11 +69,13 @@ int HtmlConsumer::consume(Provider &provider) {
 
     switch (event->event_type) {
         case FORK:
+            running_processes.insert(event->fork.child_pid);
             main_presenter->addForkEvent(timestamp, event->pid, event->fork.child_pid);
             return 0;
         case EXIT:
+            running_processes.erase(event->pid);
             main_presenter->addExitEvent(timestamp, event->pid, event->exit.code);
-            if (event->pid == root_pid) {
+            if (running_processes.empty()) {
                 stop();
                 provider.stop();
             }
