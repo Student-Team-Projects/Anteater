@@ -6,8 +6,10 @@ FRONTEND_INCLUDE := frontend/include
 FRONTEND_SRCDIR := frontend/src
 CHISEL := proc_tree.lua
 
+PKGNAME ?= debugger
+
 CHISELDIR := $(DESTDIR)/usr/share/sysdig/chisels
-LOGSDIR := /var/log/debugger
+LOGSDIR := /var/log/$(PKGNAME)
 
 INCLUDES := $(INCLUDE) $(OBJDIR) $(FRONTEND_INCLUDE)
 
@@ -47,7 +49,6 @@ ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 BPF_IFLAGS := $(patsubst %,-I%,$(BPF_INCLUDES))
 
 # installation variables
-PKGNAME := debugger
 TARGET := $(DESTDIR)/usr/bin
 
 # Get Clang's default includes on this system. We'll explicitly add these dirs
