@@ -13,13 +13,14 @@ depends=('bpf' 'sysdig')
 makedepends=('clang' 'compiler-rt' 'llvm' 'llvm-libs' 'spdlog' 'tclap' 'fmt')
 source=("$pkgname-$pkgver.zip::https://github.com/Student-Team-Projects/Debugger/archive/refs/heads/main.zip")
 md5sums=("SKIP")
+noextract=()
 
 build() {
-	cd "$pkgname-$pkgver"
+	cd "Debugger-main"
 	make
 }
 
 package() {
-	cd "$pkgname-$pkgver"
+	cd "Debugger-main"
 	make DESTDIR="$pkgdir" PKGNAME="$pkgname" install
 }
