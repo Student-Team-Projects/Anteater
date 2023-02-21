@@ -7,7 +7,7 @@ FRONTEND_SRCDIR := frontend/src
 CHISEL := proc_tree.lua
 
 CHISELDIR := $(DESTDIR)/usr/share/sysdig/chisels
-LOGSDIR := /tmp/debugger/logs
+LOGSDIR := /var/log/debugger
 
 INCLUDES := $(INCLUDE) $(OBJDIR) $(FRONTEND_INCLUDE)
 
