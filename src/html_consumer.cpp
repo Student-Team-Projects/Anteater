@@ -16,10 +16,8 @@ int HtmlConsumer::start(Provider &provider, pid_t root_pid, bool hex_input) {
     this->hex_input = hex_input;
     running_processes.insert(root_pid);
 
-    const std::filesystem::path directory = getenv("HOME") + std::string("/debugger");
-    if (!std::filesystem::create_directory(directory)) {
-        SPDLOG_ERROR(fmt::format("Error creating directory {}", directory.c_str()));
-    }
+    const std::filesystem::path directory =  "/var/lib/debugger";
+    std::filesystem::create_directory(directory);
     this->view_factory = std::make_unique<HtmlViewFactory>(directory, "index", "styles", true);
     this->presenter_factory = std::make_unique<PresenterFactory>(std::move(view_factory));
     this->main_presenter = presenter_factory->createMainPresenter();
