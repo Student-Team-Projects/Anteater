@@ -42,6 +42,24 @@ Currently there are two different providers implemented and they differ in what 
 
 ### eBPF
 
+Events are captured using [eBPF](https://ebpf.io/). Specifically, we used [libbpf](https://github.com/libbpf/libbpf), a C API for `eBPF`.
+
+The main idea of `eBPF` is that it allows users to hook their own programs (called BPF porgrams) into a running kernel. These programs are subject to a high number of restrictions to ensure safety.
+
+All the BPF programs are in `src/bpf` as `*.bpf.c` files. They are managed and loaded into the kernel in the appropriate Provider.
+
+References and useful links regarding `eBPF` and `libbpf`:
+
+[libbpf-bootstrap](https://github.com/libbpf/libbpf-bootstrap)
+
+[bpf-helpers](https://man7.org/linux/man-pages/man7/bpf-helpers.7.html)
+
+[wiki](https://ebpf.io/what-is-ebpf)
+
+[Linux kernel structures](https://docs.huihoo.com/doxygen/linux/kernel/3.7/structtask__struct.html)
+
+[Linux kernel source code](https://elixir.bootlin.com/linux/latest/source)
+
 ### Sysdig
 
 There is a possibility to use [sysdig](https://sysdig.com/) as system events provider, though **it's not recommended**, as `ebpf` proved to be faster and more reliable.
