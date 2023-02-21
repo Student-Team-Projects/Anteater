@@ -133,6 +133,7 @@ HtmlMainView::HtmlMainView(
         file_.open(path, std::ios::app);
         if (!exists) {
             fmt::print(file_, HTML_HEADER, fmt::arg("styles", styles_file_basename));
+            file_ << std::flush;
         }
     }
     {
@@ -162,6 +163,7 @@ void HtmlMainView::addCapture(
                fmt::arg("user", getUserInfoString(uid)),
                fmt::arg("command", command)
     );
+    file_ << std::flush;
 }
 
 HtmlMainView::~HtmlMainView() {

@@ -92,6 +92,7 @@ HtmlLogView::HtmlLogView(
                fmt::arg("command", command),
                fmt::arg("start_time", timestamp)
     );
+    html_file_ << std::flush;
 }
 
 std::string HtmlLogView::getId() {
@@ -104,6 +105,7 @@ void HtmlLogView::addLogEntry(time_point timestamp, std::string_view content, bo
                fmt::arg("content", convert(content)),
                fmt::arg("stream_class", is_stdout ? "stdout" : "stderr")
     );
+    html_file_ << std::flush;
 }
 
 void HtmlLogView::linkSubpage(time_point timestamp, std::string_view subpage_id, uid_t uid, std::string_view command) {
@@ -113,6 +115,7 @@ void HtmlLogView::linkSubpage(time_point timestamp, std::string_view subpage_id,
                fmt::arg("user", getUserInfoString(uid)),
                fmt::arg("command", command)
     );
+    html_file_ << std::flush;
 }
 
 void HtmlLogView::setStatus(time_point timestamp, int exit_code) {
@@ -121,6 +124,7 @@ void HtmlLogView::setStatus(time_point timestamp, int exit_code) {
                fmt::arg("exit_code", exit_code),
                fmt::arg("status_class", exit_code == 0 ? "ok" : "error")
     );
+    html_file_ << std::flush;
 }
 
 HtmlLogView::~HtmlLogView() {

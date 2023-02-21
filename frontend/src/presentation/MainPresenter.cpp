@@ -46,4 +46,6 @@ void MainPresenter::addExitEvent(time_point timestamp, pid_t pid, int exit_code)
     for (const auto &subpage: created_subpages_[pid]) {
         subpage->setStatus(timestamp, exit_code);
     }
+    created_subpages_.erase(pid);
+    current_subpages_.erase(pid);
 }
