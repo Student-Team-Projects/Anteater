@@ -11,16 +11,16 @@ url="https://github.com/Student-Team-Projects/Debugger.git"
 license=('GPL3')
 depends=('bpf' 'sysdig')
 makedepends=('clang' 'compiler-rt' 'llvm' 'llvm-libs' 'spdlog' 'tclap' 'fmt')
-source=("$pkgname-$pkgver.zip::https://github.com/Student-Team-Projects/Debugger/archive/refs/heads/main.zip")
+source=("$pkgname-$pkgver.zip::https://github.com/Student-Team-Projects/$pkgname/archive/refs/heads/main.zip")
 md5sums=("SKIP")
 noextract=()
 
 build() {
-	cd "Debugger-main"
+	cd "$pkgname-main"
 	make
 }
 
 package() {
-	cd "Debugger-main"
+	cd "$pkgname-main"
 	make DESTDIR="$pkgdir" PKGNAME="$pkgname" install
 }
