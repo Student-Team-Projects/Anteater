@@ -1,6 +1,6 @@
-# Debugger
+# debugger
 
-- [What is debugger2](#introduction)
+- [What is debugger](#introduction)
   - [Introduction](#introduction)
   - [Debugger output](#debugger-output)
   - [Architecture](#architecture)
@@ -8,7 +8,7 @@
     - [eBPF](#ebpf)
     - [Sysdig](#sysdig)
   - [Consumers](#consumers)
-- [How to use debugger2](#dependencies)
+- [How to use debugger](#dependencies)
   - [Dependencies](#dependencies)
   - [Compilation and usage](#compilation-and-usage)
   - [Alias](#alias)
