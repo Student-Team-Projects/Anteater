@@ -46,6 +46,10 @@ DEBUG_CXXFLAGS := -g -fsanitize=address
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 BPF_IFLAGS := $(patsubst %,-I%,$(BPF_INCLUDES))
 
+# installation variables
+PKGNAME := debugger
+TARGET := $(DESTDIR)/usr/bin
+
 # Get Clang's default includes on this system. We'll explicitly add these dirs
 # to the includes list when compiling with `-target bpf` because otherwise some
 # architecture-specific dirs will be "missing" on some architectures/distros -
@@ -57,8 +61,13 @@ BPF_IFLAGS := $(patsubst %,-I%,$(BPF_INCLUDES))
 CLANG_BPF_SYS_INCLUDES = $(shell $(CLANG) -v -E - </dev/null 2>&1 \
 	| sed -n '/<...> search starts here:/,/End of search list./{ s| \(/.*\)|-idirafter \1|p }')
 
-.PHONY: all clean chisel
+.PHONY: all clean chisel install
 all: $(BINDIR)/$(MAIN)
+
+install: chisel
+	@mkdir -p $(TARGET)
+	cp $(BINDIR)/$(MAIN) $(TARGET)/$(PKGNAME)
+	@echo Install complete!
 
 # cleanup
 .PHONY: clean
@@ -67,6 +76,7 @@ clean:
 
 # installs chisel, so that sysdig can find it
 chisel:
+	@mkdir -p $(CHISELDIR)
 	cp $(SRCDIR)/$(CHISEL) $(CHISELDIR)
 
 # create vmlinux.h
