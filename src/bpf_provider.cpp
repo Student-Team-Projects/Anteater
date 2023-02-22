@@ -53,69 +53,82 @@ int handle_event(void *ctx, void *data, size_t data_sz) {
 }
 
 int BPFProvider::start() {
+    SPDLOG_INFO("Initializing BPF programs");
     int ret = init();
-    if (!ret) ret = listen();
+    if (!ret) {
+        SPDLOG_INFO("Beginning listening");
+        ret = listen();
+    }
     return ret;
 }
 
 int BPFProvider::init() {
     // Load and verify BPF application
+    SPDLOG_INFO("Loading BPF skeleton");
     skel = tracer_bpf__open();
     if (!skel) {
-        SPDLOG_ERROR("Failed to open and load BPF skeleton\n");
+        SPDLOG_ERROR("Failed to open and load BPF skeleton");
         return 1;
     }
     
     int err;
 
     // Parametrize BPF code with boot time as creation time of kernel proc entry
+    SPDLOG_INFO("Parametrizing BPF skeleton with last boot time");
     struct stat kernel_proc_entry;
     err = stat("/proc/1", &kernel_proc_entry);
     if (err) {
-        SPDLOG_ERROR("Failed to fetch last boot time\n");
+        SPDLOG_ERROR("Failed to fetch last boot time");
         return cleanup(err);
     }
     skel->rodata->boot_time = kernel_proc_entry.st_ctim.tv_sec * (uint64_t) 1'000'000'000 + kernel_proc_entry.st_ctim.tv_nsec;
 
     // create per-cpu auxiliary maps
+    SPDLOG_INFO("Creating auxiliary maps");
     err = bpf_map__set_max_entries(skel->maps.aux_maps, get_nprocs());
     if (err) {
-        SPDLOG_ERROR("Failed to make per-cpu auxiliary maps\n");
+        SPDLOG_ERROR("Failed to make per-cpu auxiliary maps");
         return cleanup(err);
     }
     
     // Load and verify BPF programs
+    SPDLOG_INFO("Loading programs into BPF skeleton");
     err = tracer_bpf__load(skel);
     if (err) {
-        SPDLOG_ERROR("Failed to load and verify BPF skeleton\n");
+        SPDLOG_ERROR("Failed to load and verify BPF skeleton");
         return cleanup(err);
     }
 
     // Parametrize BPF code with root process PID
+    SPDLOG_INFO("Parametrizing BPF skeleton with root PID");
     err = bpf_map__update_elem(skel->maps.pid_tree, &root_pid, sizeof(pid_t), &root_pid, sizeof(pid_t), BPF_ANY);
     if (err) {
-        SPDLOG_ERROR("Failed to initialize root pid in BPF program\n");
+        SPDLOG_ERROR("Failed to initialize root pid in BPF program");
         return cleanup(err);
     }
 
     // Attach tracepoints
+    SPDLOG_INFO("Attaching tracepoints");
     err = tracer_bpf__attach(skel);
     if (err) {
-        SPDLOG_ERROR("Failed to attach BPF skeleton\n");
+        SPDLOG_ERROR("Failed to attach BPF skeleton");
         return cleanup(err);
     }
 
     // Set up ring buffer polling
+    SPDLOG_INFO("Setting up ring buffer");
     rb = ring_buffer__new(bpf_map__fd(skel->maps.rb), handle_event, this, NULL);
     if (!rb) {
-        SPDLOG_ERROR("Failed to create ring buffer\n");
+        SPDLOG_ERROR("Failed to create ring buffer");
         return cleanup(-1);
     }
+    SPDLOG_INFO("Done initializing");
     return 0;
 }
 
 int BPFProvider::listen() {
     // unpause traced program
+    SPDLOG_INFO("Waking up program to be debugged");
     kill(root_pid, SIGUSR1);
     // Process events
     while (!exiting) {
@@ -124,11 +137,11 @@ int BPFProvider::listen() {
         if (err == -EINTR)
             return cleanup(0);
         if (err < 0) {
-            SPDLOG_ERROR("Error polling buffer: %d\n", err);
+            SPDLOG_ERROR("Error polling buffer: {}", err);
             return cleanup(err);
         }
     }
-    
+    SPDLOG_INFO("Done with capturing events");
     return cleanup(0);
 }
 

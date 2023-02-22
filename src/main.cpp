@@ -107,19 +107,12 @@ int main(int argc, const char **argv) {
             if (prog_uid) {
                 setgroups(grp_cnt, grps);
                 setuid(prog_uid);
-                SPDLOG_INFO("Setting UID for program to " + std::to_string(prog_uid) + " (" + userArg.getValue() + ")");
             }
 
-            SPDLOG_INFO("Program process going to sleep");
-            
             sigsuspend(&default_set);
             sigprocmask(SIG_SETMASK, &default_set, nullptr);
 
-            int err = execvp(*argv, const_cast<char **>(argv));
-
-            SPDLOG_ERROR("Failed to exec into program to debug with error " 
-                + std::to_string(err));
-            return 1;
+            return -execvp(*argv, const_cast<char **>(argv));
         }
 
         sigprocmask(SIG_SETMASK, &default_set, nullptr);
@@ -147,6 +140,7 @@ int main(int argc, const char **argv) {
         std::signal(SIGTERM, sig_handler);
         std::signal(SIGINT, sig_handler);
 
+        SPDLOG_INFO("Starting consumer...");
         std::thread consumer_thread = std::thread([&]() {
             consumer_ptr->start(
                 *provider_ptr,
@@ -154,7 +148,7 @@ int main(int argc, const char **argv) {
                 (sysdigArg.getValue()) ? true : false // BPF doesn't convert buffers to hex yet
             );
         });
-
+        SPDLOG_INFO("Starting provider...");
         int ret = provider_ptr->start();
         provider_ptr->stop();
         consumer_thread.join();
