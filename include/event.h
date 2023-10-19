@@ -2,40 +2,51 @@
 
 #include "constants.h"
 
-enum Stream {
+#if __has_include(<cstdint>)
+#include <cstdint>
+#endif
+
+enum Stream
+{
     STDOUT,
     STDERR
 };
 
-enum EventType {
+enum EventType
+{
     WRITE,
     EXEC,
     EXIT,
     FORK
 };
 
-struct Event {
+struct Event
+{
     enum EventType event_type;
     pid_t pid;
     uint64_t timestamp;
 
-    union {
-        struct { // write
+    union
+    {
+        struct
+        { // write
             enum Stream stream;
             size_t length;
             char data[];
         } write;
-        struct { // fork
+        struct
+        { // fork
             pid_t child_pid;
         } fork;
-        struct { // exec
+        struct
+        { // exec
             uid_t uid;
             size_t length;
             char data[];
         } exec;
-        struct { // exit
+        struct
+        { // exit
             int code;
         } exit;
     };
 };
-
