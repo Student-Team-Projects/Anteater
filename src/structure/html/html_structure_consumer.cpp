@@ -34,8 +34,10 @@ void html_structure_consumer::subconsumer::consume(events::fork_event const& e) 
 }
 
 std::unique_ptr<structure_consumer> html_structure_consumer::subconsumer::consume(events::exec_event const& e) {
-  std::filesystem::path subfilename = filename.parent_path() / (event_to_filename(e) + ".html");
-  fmt.format(file, e, subfilename);
+  std::filesystem::path childname = event_to_filename(e) + ".html";
+  fmt.format(file, e, childname);
+
+  std::filesystem::path subfilename = filename.parent_path() / childname;
   return std::make_unique<html_structure_consumer::subconsumer>(e, subfilename);
 }
 
