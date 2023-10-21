@@ -108,16 +108,14 @@ std::chrono::system_clock::time_point get_boot_time() {
   int err = stat("/proc/1", &kernel_proc_entry);
   if (err) throw std::runtime_error("Failed to fetch last boot time");
 
-  using namespace std::chrono;
   auto seconds_part = std::chrono::seconds{kernel_proc_entry.st_ctim.tv_sec};
   auto nanoseconds_part =
       std::chrono::nanoseconds{kernel_proc_entry.st_ctim.tv_nsec};
 
-  return system_clock::time_point(seconds_part + nanoseconds_part);
+  return std::chrono::system_clock::time_point(seconds_part + nanoseconds_part);
 }
 
 std::chrono::system_clock::time_point into_timestamp(uint64_t event_timestamp) {
-  using namespace std::chrono;
   static auto boot_time = get_boot_time();
   auto duration_to_event = std::chrono::nanoseconds{event_timestamp};
   return boot_time + duration_to_event;
