@@ -133,14 +133,14 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx) {
   if (args_size > 1024) args_size = 1024;
   if (bpf_probe_read_user(e->data, args_size, (void *) args_start)) return 0;
 
-  // find pwd
-  struct path pwd = BPF_CORE_READ(task, fs, pwd);
-  int pwd_size = path_to_str(&pwd, e->data + args_size, 1024);
-  if(pwd_size < 0) return 0;
-  if(pwd_size > 1024) return 0;
+  // find working_directory
+  struct path working_directory = BPF_CORE_READ(task, fs, pwd);
+  int working_directory_size = path_to_str(&working_directory, e->data + args_size, 1024);
+  if(working_directory_size < 0) return 0;
+  if(working_directory_size > 1024) return 0;
 
-  make_exec_event(e, pid, uid, args_size, pwd_size);
-  int data_size = pwd_size + args_size;
+  make_exec_event(e, pid, uid, args_size, working_directory_size);
+  int data_size = working_directory_size + args_size;
   if(data_size < 0) return 0;
   if(data_size > 2047) return 0;
   data_size &= 2047;
