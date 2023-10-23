@@ -1,153 +1,139 @@
-#include "bpf_provider.h"
+#include "bpf_provider.hpp"
 
-#include <unistd.h>
-#include <bpf/libbpf.h>
-#include <sys/sysinfo.h>
 #include <sys/stat.h>
+#include <sys/sysinfo.h>
+#include <unistd.h>
 
-#include <csignal>
-#include <cstdarg>
-#include <cstdio>
-#include <cstring>
-#include <cstdlib>
-#include <ostream>
-#include <string>
+#include <iostream>
 
-#include "fmt/format.h"
-#include "spdlog/spdlog.h"
+#include "backend/event.h"
 
-#include "constants.h"
-#include "event.h"
+bpf_provider::bpf_provider() {
+  skel = tracer::open_and_load();
+  tracer::attach(skel);
+  buffer = ring_buffer__new(bpf_map__fd(skel->maps.queue), buf_process_sample,
+                            this, nullptr);
+};
 
-#include "tracer.skel.h"
+bpf_provider::~bpf_provider() {
+  tracer::detach(skel);
+  tracer::destroy(skel);
+};
 
-static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args) {
-    va_list args_cpy;
-    va_copy(args_cpy, args);
-    std::vector<char> buf(1+std::vsnprintf(nullptr, 0, format, args_cpy));
-    va_end(args_cpy);
-    std::vsnprintf(buf.data(), buf.size(), format, args);
-    switch (level) {
-        case LIBBPF_WARN:
-            SPDLOG_WARN(buf.data());
-            return 0;
-        case LIBBPF_DEBUG:
-            SPDLOG_DEBUG(buf.data());
-            return 0;
-        default:
-            SPDLOG_INFO(buf.data());
-    }
-    return 0;
+bool bpf_provider::is_active() {
+  return !tracked_processes.empty() || !messages.empty();
 }
 
-BPFProvider::BPFProvider(pid_t root_pid, size_t capacity) : refs(capacity), root_pid(root_pid){
-    /* Set up libbpf errors and debug info callback */
-    libbpf_set_strict_mode(LIBBPF_STRICT_ALL);
-    libbpf_set_print(libbpf_print_fn);
+std::optional<events::event> bpf_provider::provide() {
+  if (messages.empty()) ring_buffer__poll(buffer, 100);
+  if (messages.empty()) return {};
+  auto result = messages.front();
+  messages.pop();
+  return {std::move(result)};
 }
 
-int handle_event(void *ctx, void *data, size_t data_sz) {
-    BPFProvider *ths = static_cast<BPFProvider *>(ctx);
-    ths->alloc_and_push(static_cast<const Event *>(data), data_sz);
-    return 0;
+void bpf_provider::run(char *argv[]) {
+  pid_t child = fork();
+  int value = 0;
+
+  if (child == 0) {
+    pid_t pid = getpid();
+    bpf_map__update_elem(skel->maps.processes, &pid, sizeof(pid), &value,
+                         sizeof(value), BPF_ANY);
+    execvp(argv[0], argv);
+    exit(-1);
+  } else {
+    tracked_processes.insert(child);
+  }
 }
 
-int BPFProvider::start() {
-    int ret = init();
-    if (!ret) ret = listen();
-    return ret;
+/**
+ * The timestamps returned in events are relative to system boot time.
+ * To return meaningful timestamps we have to get boot time from kernel, which
+ * is done here.
+ */
+std::chrono::system_clock::time_point get_boot_time() {
+  struct stat kernel_proc_entry;
+  int err = stat("/proc/1", &kernel_proc_entry);
+  if (err) throw std::runtime_error("Failed to fetch last boot time");
+
+  using namespace std::chrono;
+  auto seconds_part = std::chrono::seconds{kernel_proc_entry.st_ctim.tv_sec};
+  auto nanoseconds_part =
+      std::chrono::nanoseconds{kernel_proc_entry.st_ctim.tv_nsec};
+
+  return system_clock::time_point(seconds_part + nanoseconds_part);
 }
 
-int BPFProvider::init() {
-    // Load and verify BPF application
-    skel = tracer_bpf__open();
-    if (!skel) {
-        SPDLOG_ERROR("Failed to open and load BPF skeleton\n");
-        return 1;
-    }
-    
-    int err;
-
-    // Parametrize BPF code with boot time as creation time of kernel proc entry
-    struct stat kernel_proc_entry;
-    err = stat("/proc/1", &kernel_proc_entry);
-    if (err) {
-        SPDLOG_ERROR("Failed to fetch last boot time\n");
-        return cleanup(err);
-    }
-    skel->rodata->boot_time = kernel_proc_entry.st_ctim.tv_sec * (uint64_t) 1'000'000'000 + kernel_proc_entry.st_ctim.tv_nsec;
-
-    // create per-cpu auxiliary maps
-    err = bpf_map__set_max_entries(skel->maps.aux_maps, get_nprocs());
-    if (err) {
-        SPDLOG_ERROR("Failed to make per-cpu auxiliary maps\n");
-        return cleanup(err);
-    }
-    
-    // Load and verify BPF programs
-    err = tracer_bpf__load(skel);
-    if (err) {
-        SPDLOG_ERROR("Failed to load and verify BPF skeleton\n");
-        return cleanup(err);
-    }
-
-    // Parametrize BPF code with root process PID
-    err = bpf_map__update_elem(skel->maps.pid_tree, &root_pid, sizeof(pid_t), &root_pid, sizeof(pid_t), BPF_ANY);
-    if (err) {
-        SPDLOG_ERROR("Failed to initialize root pid in BPF program\n");
-        return cleanup(err);
-    }
-
-    // Attach tracepoints
-    err = tracer_bpf__attach(skel);
-    if (err) {
-        SPDLOG_ERROR("Failed to attach BPF skeleton\n");
-        return cleanup(err);
-    }
-
-    // Set up ring buffer polling
-    rb = ring_buffer__new(bpf_map__fd(skel->maps.rb), handle_event, this, NULL);
-    if (!rb) {
-        SPDLOG_ERROR("Failed to create ring buffer\n");
-        return cleanup(-1);
-    }
-    return 0;
+std::chrono::system_clock::time_point into_timestamp(uint64_t event_timestamp) {
+  using namespace std::chrono;
+  static auto boot_time = get_boot_time();
+  auto duration_to_event = std::chrono::nanoseconds{event_timestamp};
+  return boot_time + duration_to_event;
 }
 
-int BPFProvider::listen() {
-    // unpause traced program
-    kill(root_pid, SIGUSR1);
-    // Process events
-    while (!exiting) {
-        int err = ring_buffer__poll(rb, 100);
-        // Ctrl-C will cause -EINTR
-        if (err == -EINTR)
-            return cleanup(0);
-        if (err < 0) {
-            SPDLOG_ERROR("Error polling buffer: %d\n", err);
-            return cleanup(err);
-        }
-    }
-    
-    return cleanup(0);
+static events::write_event from(backend::write_event *e) {
+  return {
+    {
+      .source_pid = e->proc,
+      .timestamp = into_timestamp(e->timestamp),
+    },
+    .file_descriptor = e->fd,
+    .data = {e->data, static_cast<size_t>(e->size)},
+  };
 }
 
-int BPFProvider::cleanup(int err) {
-    refs.unblock();
-    ring_buffer__free(rb);
-    tracer_bpf__destroy(skel);
-
-    return err < 0 ? -err : 0;
+static events::fork_event from(backend::fork_event *e) {
+  return {
+    {
+      .source_pid = e->parent,
+      .timestamp = into_timestamp(e->timestamp),
+    },
+    .child_pid = e->child,
+  };
 }
 
-void BPFProvider::alloc_and_push(const Event *pt, size_t sz) {
-    Event *pt_cpy = static_cast<Event *>(malloc(sz));
-    if (pt_cpy == nullptr)
-        return;
-    memmove(pt_cpy, pt, sz);
-    refs.push(event_ref(pt_cpy));
+static events::exit_event from(backend::exit_event *e) {
+  return {
+    {
+      .source_pid = e->proc,
+      .timestamp = into_timestamp(e->timestamp),
+    },
+    .exit_code = e->code,
+  };
 }
 
-Provider::event_ref BPFProvider::provide() {
-    return refs.pop();
+static events::exec_event from(backend::exec_event *e) {
+  std::cout << e->args_size << std::endl;
+  return {
+    {
+      .source_pid = e->proc,
+      .timestamp = into_timestamp(e->timestamp),
+    },
+    .user_id = 0,
+    .command = {e->args, static_cast<size_t>(e->args_size)},
+  };
+}
+
+
+int bpf_provider::buf_process_sample(void *ctx, void *data, size_t len) {
+  bpf_provider *me = static_cast<bpf_provider *>(ctx);
+  backend::event *e = static_cast<backend::event *>(data);
+  switch (e->type) {
+    case backend::FORK:
+      me->tracked_processes.insert(e->fork.child);
+      me->messages.push(from(&(e->fork)));
+      break;
+    case backend::EXIT:
+      me->tracked_processes.erase(e->exit.proc);
+      me->messages.push(from(&(e->exit)));
+      break;
+    case backend::EXEC:
+      me->messages.push(from(&(e->exec)));
+      break;
+    case backend::WRITE:
+      me->messages.push(from(&(e->write)));
+      break;
+  }
+  return 0;
 }
