@@ -1,11 +1,11 @@
-#include "consumers/plain_event_consumer.hpp"
+#include "console_logger.hpp"
 
 #include <iomanip>
 #include <iostream>
 
 using namespace events;
 
-void plain_event_consumer::consume(event const& e) {
+void console_logger::consume(event const& e) {
   std::visit(visitor, e);
 }
 
@@ -23,7 +23,7 @@ std::string unescape(std::string const& s)
   return result;
 }
 
-void plain_event_consumer::event_visitor::operator()(fork_event const& e) {
+void console_logger::event_visitor::operator()(fork_event const& e) {
     std::cout 
     << std::setw(30) << e.timestamp 
     << std::setw(8) << e.source_pid 
@@ -32,7 +32,7 @@ void plain_event_consumer::event_visitor::operator()(fork_event const& e) {
     << "\n";
 }
 
-void plain_event_consumer::event_visitor::operator()(exec_event const& e) {
+void console_logger::event_visitor::operator()(exec_event const& e) {
     std::cout 
     << std::setw(30) << e.timestamp 
     << std::setw(8) << e.source_pid 
@@ -42,7 +42,7 @@ void plain_event_consumer::event_visitor::operator()(exec_event const& e) {
     << "\n";
 }
 
-void plain_event_consumer::event_visitor::operator()(exit_event const& e) {
+void console_logger::event_visitor::operator()(exit_event const& e) {
     std::cout 
     << std::setw(30) << e.timestamp 
     << std::setw(8) << e.source_pid 
@@ -52,7 +52,7 @@ void plain_event_consumer::event_visitor::operator()(exit_event const& e) {
 }
 
 
-void plain_event_consumer::event_visitor::operator()(write_event const& e) {
+void console_logger::event_visitor::operator()(write_event const& e) {
     std::cout 
     << std::setw(30) << e.timestamp 
     << std::setw(8) << e.source_pid 

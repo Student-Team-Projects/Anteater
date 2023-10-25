@@ -9,7 +9,7 @@
 #include <string>
 
 #include "bpf_provider.hpp"
-#include "consumers/plain_event_consumer.hpp"
+#include "console_logger.hpp"
 
 static void increase_memlock_limit() {
   rlimit lim{
@@ -24,12 +24,12 @@ int main(int argc, char *argv[]) {
   increase_memlock_limit();
 
   bpf_provider provider;
-  events::plain_event_consumer consumer;
+  console_logger logger;
   provider.run(argv + 1);
   while (provider.is_active()) {
     auto v = provider.provide();
     if (v.has_value())
-      consumer.consume(v.value());
+      logger.consume(v.value());
   }
   return 0;
 }
