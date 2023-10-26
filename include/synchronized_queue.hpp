@@ -4,8 +4,6 @@
 #include <mutex>
 #include <cstring>
 
-#include "provider.h"
-
 // synchronized queue for 1 reader and 1 writer
 template <typename T>
 class synchronized_queue {

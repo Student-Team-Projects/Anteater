@@ -85,7 +85,7 @@ The default consumer is `HtmlConsumer`, which creates structured logs in form of
 On archlinux
 
 ```
-sudo pacman -Sy bpf sysdig clang compiler-rt llvm llvm-libs spdlog tclap
+sudo pacman -S bpf sysdig clang compiler-rt llvm llvm-libs spdlog tclap
 ```
 
 ## Compilation and usage
