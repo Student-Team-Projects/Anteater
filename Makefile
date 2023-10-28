@@ -48,24 +48,28 @@ $(VMLINUX):
 # Tests
 TEST_SRC_DIR := test/tests
 TEST_SRCS := $(shell find $(TEST_SRC_DIR) -name "*.cpp")
-TEST_OBJS := $(patsubst test/tests/%.cpp,obj/test/tests/%.o, $(TEST_SRCS))
+TEST_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o, $(TEST_SRCS))
 TEST_TARGET := $(BIN_DIR)/test
+
+# Test programss
+PROGRAM_SRC_DIR := test/programs
+PROGRAM_SRCS := $(shell find $(PROGRAM_SRC_DIR) -name "*.cpp")
+PROGRAM_TARGETS := $(patsubst $(PROGRAM_SRC_DIR)/%.cpp,$(BIN_DIR)/programs/%, $(PROGRAM_SRCS))
 
 test : $(TEST_TARGET)
 	./$(TEST_TARGET)
 
-$(TEST_TARGET) : $(TEST_OBJS) $(OBJS)
+$(TEST_TARGET) : $(TEST_OBJS) $(OBJS) $(TARGET) $(PROGRAM_TARGETS)
 	@mkdir -p $(dir $@)
 	clang++ -std=c++20 $(TEST_OBJS) $(OBJS) -lbpf -lelf -lgtest -lgtest_main -pthread -o $@
 
-$(TEST_OBJS) : $(OBJ_DIR)/%.o : %.cpp
+$(TEST_OBJS) : $(OBJ_DIR)/%.o : %.cpp $(OBJ_DIR)/$(SRC_DIR)/bpf_provider.o
 	@mkdir -p $(dir $@)
 	clang++ -std=c++20 $(INCLUDE_FLAGS) -c $< -o $@
 
-# TODO: Test programs
-# PROGRAM_SRC_DIR := test/programs
-# PROGRAM_SRCS := $(shell find $(PROGRAM_SRC_DIR) -name "*.cpp")
-# PROGRAM_TARGETS = := $(patsubst test/programs/%.cpp,bin/programs/%, $(PROGRAM_SRCS))
+$(PROGRAM_TARGETS) : $(BIN_DIR)/programs/% : $(PROGRAM_SRC_DIR)/%.cpp
+	@mkdir -p $(dir $@)
+	clang++ -std=c++20 $< -o $@
 
 .PHONY: clean clean_fast test all
 clean:
