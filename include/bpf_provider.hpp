@@ -14,7 +14,8 @@ class bpf_provider {
   void run(char *argv[]);
   bool is_active();
   std::optional<events::event> provide();
-private:
+
+ private:
   static int buf_process_sample(void *ctx, void *data, size_t len);
   tracer *skel;
   ring_buffer *buffer;
