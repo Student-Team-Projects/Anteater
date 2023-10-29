@@ -54,7 +54,7 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx) {
   u64 args_start =  BPF_CORE_READ(task, mm, arg_start);
   u64 args_end = BPF_CORE_READ(task, mm, arg_end);
   if(args_end <= args_start) return 0;
-  u64 args_size = args_end - args_start;
+  u64 args_size = args_end - args_start - 1;
   if (args_size > 1024) args_size = 1024; 
 
   u32 key = 0;

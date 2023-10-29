@@ -104,14 +104,21 @@ static events::exit_event from(backend::exit_event *e) {
 }
 
 static events::exec_event from(backend::exec_event *e) {
-  std::cout << e->args_size << std::endl;
+  std::string command;
+  for (int i = 0; i < e->args_size; i++) {
+    if (e->args[i] != '\0')
+      command.push_back(e->args[i]);
+    else
+      command.push_back(' ');
+  }
+
   return {
     {
       .source_pid = e->proc,
       .timestamp = into_timestamp(e->timestamp),
     },
     .user_id = 0,
-    .command = {e->args, static_cast<size_t>(e->args_size)},
+    .command = command,
   };
 }
 
