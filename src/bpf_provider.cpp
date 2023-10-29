@@ -13,7 +13,6 @@
 void static_init() {
   static bool called = false;
   if (called) return;
-  called = true;
 
   if (geteuid())
     throw std::runtime_error{"This program should be run with sudo privileges"};
@@ -25,6 +24,8 @@ void static_init() {
 
   if (setrlimit(RLIMIT_MEMLOCK, &lim))
     throw std::runtime_error{"Failed to increase RLIMIT_MEMLOCK"};
+
+  called = true;
 }
 
 bpf_provider::bpf_provider() {
