@@ -2,6 +2,9 @@
 
 #include "bpf_provider.hpp"
 
+const std::filesystem::path programs{PATH_TO_PROGRAMS},
+    debugger{PATH_TO_DEBUGGER};
+
 // https://en.cppreference.com/w/cpp/utility/variant/visit
 template <class... Ts>
 struct overloaded : Ts... {
@@ -10,10 +13,14 @@ struct overloaded : Ts... {
 template <class... Ts>
 overloaded(Ts...) -> overloaded<Ts...>;
 
-std::vector<events::event> run_bpf_provider(
-    const std::vector<std::string> &args) {
+std::vector<events::event> run_bpf_provider(const std::vector<arg_t> &args) {
   std::vector<char *> argv;
-  for (auto &arg : args) argv.push_back(const_cast<char *>(arg.data()));
+  for (auto &arg : args)
+    std::visit(
+        [&argv](auto &&data) {
+          argv.push_back(const_cast<char *>(data.c_str()));
+        },
+        arg);
   argv.push_back(nullptr);
 
   bpf_provider provider;
@@ -29,7 +36,7 @@ std::vector<events::event> run_bpf_provider(
 }
 
 // this is not very efficient, but it is enough for testing
-void run_bpf_provider(const std::vector<std::string> &args,
+void run_bpf_provider(const std::vector<arg_t> &args,
                       std::function<void(events::fork_event)> fork_func,
                       std::function<void(events::exec_event)> exec_func,
                       std::function<void(events::exit_event)> exit_func,

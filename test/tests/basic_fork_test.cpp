@@ -4,12 +4,12 @@
 
 #include "testing_utility.hpp"
 
-TEST(programs, basic_fork) {
+TEST(PROGRAMS, BASIC_FORK) {
   int forks = 0, exits = 0;
   std::map<char, int> writes;
 
   run_bpf_provider(
-      {"bin/programs/basic_fork"}, [&](events::fork_event fork) { ++forks; },
+      {programs / "basic_fork"}, [&](events::fork_event fork) { ++forks; },
       [&](events::exec_event exec) {},
       [&](events::exit_event exit) { ++exits; },
       [&](events::write_event write) { ++writes[write.data.front()]; });

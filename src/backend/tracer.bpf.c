@@ -55,7 +55,7 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx) {
   u64 args_end = BPF_CORE_READ(task, mm, arg_end);
   if(args_end <= args_start) return 0;
   u64 args_size = args_end - args_start;
-  if (args_size > 1024) args_size = 1024; 
+  if (args_size > 1024) args_size = 1024;
 
   u32 key = 0;
   struct exec_event *e = bpf_map_lookup_elem(&aux_maps, &key);
@@ -93,7 +93,7 @@ int handle_exit(struct trace_event_raw_sched_process_template *ctx) {
       bpf_ringbuf_reserve(&queue, sizeof(struct exit_event), 0);
   if (event == NULL) return 0;
   struct task_struct *task = (struct task_struct *) bpf_get_current_task();
-  make_exit_event(event, pid, BPF_CORE_READ(task, exit_code));
+  make_exit_event(event, pid, (BPF_CORE_READ(task, exit_code) >> 8) & 0xFF);
   bpf_ringbuf_submit(event, 0);
   bpf_map_delete_elem(&processes, &pid);
   return 0;
