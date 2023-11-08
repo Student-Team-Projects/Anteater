@@ -1,14 +1,36 @@
 #include "bpf_provider.hpp"
 
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/sysinfo.h>
 #include <unistd.h>
 
 #include <iostream>
+#include <stdexcept>
 
 #include "backend/event.h"
 
+void static_init() {
+  static bool called = false;
+  if (called) return;
+
+  if (geteuid())
+    throw std::runtime_error{"This program should be run with sudo privileges"};
+
+  rlimit lim{
+    .rlim_cur = RLIM_INFINITY,
+    .rlim_max = RLIM_INFINITY,
+  };
+
+  if (setrlimit(RLIMIT_MEMLOCK, &lim))
+    throw std::runtime_error{"Failed to increase RLIMIT_MEMLOCK"};
+
+  called = true;
+}
+
 bpf_provider::bpf_provider() {
+  static_init();
+
   skel = tracer::open_and_load();
   tracer::attach(skel);
   buffer = ring_buffer__new(bpf_map__fd(skel->maps.queue), buf_process_sample,
@@ -41,7 +63,7 @@ void bpf_provider::run(char *argv[]) {
     bpf_map__update_elem(skel->maps.processes, &pid, sizeof(pid), &value,
                          sizeof(value), BPF_ANY);
     execvp(argv[0], argv);
-    exit(-1);
+    throw std::runtime_error{"execvp() failed"};
   } else {
     tracked_processes.insert(child);
   }
@@ -72,38 +94,28 @@ std::chrono::system_clock::time_point into_timestamp(uint64_t event_timestamp) {
   return boot_time + duration_to_event;
 }
 
-static events::write_event from(backend::write_event *e) {
+static events::write_event from(const backend::write_event *e) {
   return {
-    {
-      .source_pid = e->proc,
-      .timestamp = into_timestamp(e->timestamp),
-    },
-    .file_descriptor = e->fd,
-    .data = {e->data, static_cast<size_t>(e->size)},
+    e->proc,
+    into_timestamp(e->timestamp),
+    e->fd,
+    {e->data, static_cast<size_t>(e->size)},
   };
 }
 
-static events::fork_event from(backend::fork_event *e) {
+static events::fork_event from(const backend::fork_event *e) {
   return {
-    {
-      .source_pid = e->parent,
-      .timestamp = into_timestamp(e->timestamp),
-    },
-    .child_pid = e->child,
+      e->parent,
+      into_timestamp(e->timestamp),
+      e->child,
   };
 }
 
-static events::exit_event from(backend::exit_event *e) {
-  return {
-    {
-      .source_pid = e->proc,
-      .timestamp = into_timestamp(e->timestamp),
-    },
-    .exit_code = e->code,
-  };
+static events::exit_event from(const backend::exit_event *e) {
+  return {e->proc, into_timestamp(e->timestamp), e->code};
 }
 
-static events::exec_event from(backend::exec_event *e) {
+static events::exec_event from(const backend::exec_event *e) {
   std::string command;
   for (int i = 0; i < e->args_size; i++) {
     if (e->args[i] != '\0')
@@ -122,10 +134,9 @@ static events::exec_event from(backend::exec_event *e) {
   };
 }
 
-
 int bpf_provider::buf_process_sample(void *ctx, void *data, size_t len) {
   bpf_provider *me = static_cast<bpf_provider *>(ctx);
-  backend::event *e = static_cast<backend::event *>(data);
+  const backend::event *e = static_cast<backend::event *>(data);
   switch (e->type) {
     case backend::FORK:
       me->tracked_processes.insert(e->fork.child);

@@ -34,7 +34,7 @@ Debugger architecture is base on simple provider-consumer pattern.
 
 ## Providers
 
-Providers are responsible for capturing all interesting events regarding traced processes, like fork, exec, write and exit syscalls. 
+Providers are responsible for capturing all interesting events regarding traced processes, like fork, exec, write and exit syscalls.
 
 After capturing an event, it can be consumed by a consumer.
 
@@ -74,9 +74,9 @@ For dynamic event filtering with sysdig, a chisel script `proc_tree.lua` us used
 
 ## Consumers
 
-Consumers are responsible for processing events provided by providers. Currently there are two consumers implemented. 
+Consumers are responsible for processing events provided by providers. Currently there are two consumers implemented.
 
-`PlainConsumer` simply prints events to `STDOUT`. 
+`PlainConsumer` simply prints events to `STDOUT`.
 
 The default consumer is `HtmlConsumer`, which creates structured logs in form of a bunch of html and javascript files. You can find details in [output](#debugger-output) section.
 
@@ -85,12 +85,12 @@ The default consumer is `HtmlConsumer`, which creates structured logs in form of
 On archlinux
 
 ```
-sudo pacman -S bpf sysdig clang compiler-rt llvm llvm-libs spdlog tclap
+sudo pacman -S bpf sysdig clang compiler-rt llvm llvm-libs spdlog tclap gtest
 ```
 
 ## Compilation and usage
 
-To compile run 
+To compile run
 
 ```bash
 sudo make chisel
