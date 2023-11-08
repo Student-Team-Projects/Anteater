@@ -18,8 +18,8 @@ void static_init() {
     throw std::runtime_error{"This program should be run with sudo privileges"};
 
   rlimit lim{
-      .rlim_cur = RLIM_INFINITY,
-      .rlim_max = RLIM_INFINITY,
+    .rlim_cur = RLIM_INFINITY,
+    .rlim_max = RLIM_INFINITY,
   };
 
   if (setrlimit(RLIMIT_MEMLOCK, &lim))
@@ -96,10 +96,10 @@ std::chrono::system_clock::time_point into_timestamp(uint64_t event_timestamp) {
 
 static events::write_event from(const backend::write_event *e) {
   return {
-      e->proc,
-      into_timestamp(e->timestamp),
-      e->fd,
-      {e->data, static_cast<size_t>(e->size)},
+    e->proc,
+    into_timestamp(e->timestamp),
+    e->fd,
+    {e->data, static_cast<size_t>(e->size)},
   };
 }
 
@@ -116,11 +116,16 @@ static events::exit_event from(const backend::exit_event *e) {
 }
 
 static events::exec_event from(const backend::exec_event *e) {
+  std::string command{e->args, e->args + e->args_size};
+  std::replace(command.begin(), command.end(), '\0', ' ');
+
   return {
-      e->proc,
-      into_timestamp(e->timestamp),
-      0,
-      {e->args, static_cast<size_t>(e->args_size)},
+    {
+      .source_pid = e->proc,
+      .timestamp = into_timestamp(e->timestamp),
+    },
+    .user_id = 0,
+    .command = command,
   };
 }
 

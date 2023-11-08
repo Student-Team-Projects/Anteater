@@ -9,15 +9,21 @@
 #include <string>
 
 #include "bpf_provider.hpp"
-#include "consumers/plain_event_consumer.hpp"
+#include "console_logger.hpp"
+#include "structure/plain_structure_consumer.hpp"
+#include "structure/structure_provider.hpp"
 
 int main(int argc, char *argv[]) {
   bpf_provider provider;
-  events::plain_event_consumer consumer;
+  console_logger logger;
+  structure_provider structure(std::make_unique<plain_structure_consumer>());
   provider.run(argv + 1);
   while (provider.is_active()) {
     auto v = provider.provide();
-    if (v.has_value()) consumer.consume(v.value());
+    if (v.has_value()) {
+      logger.consume(v.value());
+      structure.consume(v.value());
+    }
   }
   return 0;
 }
