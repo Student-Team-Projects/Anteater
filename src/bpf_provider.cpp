@@ -116,13 +116,8 @@ static events::exit_event from(const backend::exit_event *e) {
 }
 
 static events::exec_event from(const backend::exec_event *e) {
-  std::string command;
-  for (int i = 0; i < e->args_size; i++) {
-    if (e->args[i] != '\0')
-      command.push_back(e->args[i]);
-    else
-      command.push_back(' ');
-  }
+  std::string command{e->args, e->args + e->args_size};
+  std::replace(command.begin(), command.end(), '\0', ' ');
 
   return {
     {
