@@ -20,9 +20,16 @@ struct {
   __uint(max_entries, 256 * 1024);
 } processes __weak SEC(".maps");
 
+struct {
+  __uint(type, BPF_MAP_TYPE_ARRAY);
+  __type(key, u32);
+  __type(value, struct file *);
+  __uint(max_entries, 2);
+} tracked_descriptors __weak SEC(".maps");
+
 struct write_data {
   const char *buf;
-  int fd;
+  enum descriptor fd;
 };
 
 struct {
@@ -51,6 +58,25 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx) {
   pid_t pid = bpf_get_current_pid_tgid();
 
   struct task_struct *task = (void *) bpf_get_current_task();
+
+  // on first exec save file descriptors
+  u32 stdout_id = 0;
+  u32 stderr_id = 1;
+  struct file **current_stdout = bpf_map_lookup_elem(&tracked_descriptors, &stdout_id);
+  if(current_stdout == NULL)
+    return 0;
+  if(*current_stdout == NULL) {
+    struct file **fdt = BPF_CORE_READ(task, files, fdt, fd);
+    struct file *stdout, *stderr;
+    if(bpf_probe_read_kernel(&stdout, sizeof(stdout), fdt + 1))
+      return 0;
+    if(bpf_probe_read_kernel(&stderr, sizeof(stderr), fdt + 2))
+      return 0;
+
+    bpf_map_update_elem(&tracked_descriptors, &stdout_id, &stdout, BPF_ANY);
+    bpf_map_update_elem(&tracked_descriptors, &stderr_id, &stderr, BPF_ANY);
+  }
+
   u64 args_start =  BPF_CORE_READ(task, mm, arg_start);
   u64 args_end = BPF_CORE_READ(task, mm, arg_end);
   if(args_end <= args_start) return 0;
@@ -119,11 +145,32 @@ SEC("tp/syscalls/sys_enter_write")
 int handle_write_enter(struct write_enter_ctx *ctx) {
   if (!is_process_traced()) return 0;
 
+  struct task_struct *task = (void *) bpf_get_current_task();
+
+  struct file *dst;
+  bpf_probe_read_kernel(&dst, sizeof(dst), (struct file **) BPF_CORE_READ(task, files, fdt, fd) + ctx->fd);
+  u32 stdout_id = 0;
+  u32 stderr_id = 1;
+  struct file *stdout, *stderr;
+  struct file **f = bpf_map_lookup_elem(&tracked_descriptors, &stdout_id);
+  if(f == NULL) return 0;
+  stdout = *f;
+  f = bpf_map_lookup_elem(&tracked_descriptors, &stderr_id);
+  if(f == NULL) return 0;
+  stderr = *f;
+
+  enum descriptor fd;
+  if(dst == stdout)
+    fd = STDOUT;
+  else if(dst == stderr)
+    fd = STDERR;
+  else return 0;
+
   pid_t pid = bpf_get_current_pid_tgid();
 
   struct write_data data = {
     .buf = ctx->buf,
-    .fd = ctx->fd,
+    .fd = fd,
   };
   bpf_map_update_elem(&writes, &pid, &data, BPF_ANY);
   return 0;
