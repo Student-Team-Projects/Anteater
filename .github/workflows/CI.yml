@@ -1,0 +1,28 @@
+name: CI
+on: [push]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      # - name: Install clang-17
+      #   run: |
+      #     wget https://apt.llvm.org/llvm.sh
+      #     chmod u+x llvm.sh
+      #     echo | sudo ./llvm.sh 17
+      #     rm llvm.sh
+      - name: Install other dependencies
+        run: sudo apt-get install libgtest-dev libelf-dev
+      - name: Install libbpf
+        run: |
+          git clone https://github.com/libbpf/libbpf
+          cd libbpf/src
+          git reset --hard v1.2.2
+          sudo make LIBDIR="/usr/lib" install
+          sudo rm -rf ../../libbpf
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Build binaries
+        run: make CXX=clang++-15 bin/test
+      - name: Run tests
+        run: sudo make test
+    timeout-minutes: 2
