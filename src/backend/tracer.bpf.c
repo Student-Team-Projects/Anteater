@@ -30,6 +30,7 @@ struct {
 struct write_data {
   const char *buf;
   enum descriptor fd;
+  int padding;
 };
 
 struct {
@@ -81,7 +82,7 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx) {
   u64 args_end = BPF_CORE_READ(task, mm, arg_end);
   if(args_end <= args_start) return 0;
   u64 args_size = args_end - args_start - 1;
-  if (args_size > 1024) args_size = 1024; 
+  if (args_size > 1024) args_size = 1024;
 
   u32 key = 0;
   struct exec_event *e = bpf_map_lookup_elem(&aux_maps, &key);
