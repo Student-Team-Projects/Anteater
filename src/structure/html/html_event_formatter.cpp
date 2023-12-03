@@ -1,5 +1,7 @@
 #include "structure/html/html_event_formatter.hpp"
 
+using namespace events;
+
 const std::string CSS = R"(
     <style>
         body {
@@ -41,11 +43,11 @@ void html_event_formatter::end(std::ostream& os) {
     os.flush();
 }
 
-void html_event_formatter::format(std::ostream& os, events::fork_event const& e) {
+void html_event_formatter::format(std::ostream& os, fork_event const& e) {
     // We ignore forks
 }
 
-void html_event_formatter::format(std::ostream& os, events::exit_event const& e) {
+void html_event_formatter::format(std::ostream& os, exit_event const& e) {
     os << "<tr>"
         << "<td><pre>" << e.timestamp << "</pre></td>"
         << "<td><pre>" << "EXIT " << e.exit_code << "</td></pre>"
@@ -53,14 +55,14 @@ void html_event_formatter::format(std::ostream& os, events::exit_event const& e)
     os.flush();
 }
 
-void html_event_formatter::child_exit(std::ostream& os, events::exit_event const& e) {
+void html_event_formatter::child_exit(std::ostream& os, exit_event const& e) {
     os << "<script>"
         << "if (document.getElementById('child_exit_code_" << e.source_pid << "'))"
         << "document.getElementById('child_exit_code_" << e.source_pid << "').textContent = " << "'exit " << e.exit_code << "'"
         << "</script>";
 }
 
-void html_event_formatter::format(std::ostream& os, events::exec_event const& e, std::filesystem::path child_link) {
+void html_event_formatter::format(std::ostream& os, exec_event const& e, std::filesystem::path child_link) {
     os << "<tr>"
         << "<td><pre>" << e.timestamp << "</pre></td>"
         << "<td>"
@@ -74,10 +76,12 @@ void html_event_formatter::format(std::ostream& os, events::exec_event const& e,
     os.flush();
 }
 
-void html_event_formatter::format(std::ostream& os, events::write_event const& e) {
+void html_event_formatter::format(std::ostream& os, write_event const& e) {
+    std::string style = e.file_descriptor == write_event::descriptor::STDERR ? "style='color: #f5a142;'" : "";
+
     os << "<tr>"
         << "<td><pre>" << e.timestamp << "</pre></td>"
-        << "<td><pre>" << e.data << "</td></pre>"
+        << "<td><pre " << style << ">" << e.data << "</td></pre>"
         << "</tr>";
     os.flush();
 }

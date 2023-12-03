@@ -29,8 +29,16 @@ void plain_event_formatter::format(std::ostream& os, exec_event const& e) {
      << std::setw(6) << "EXEC" << std::setw(8) << e.user_id << " "
      << unescape(e.command) << "\n";
 }
+
+std::string descriptor_name(write_event::descriptor fd) {
+  switch (fd) {
+    case write_event::descriptor::STDOUT: return "STDOUT";
+    case write_event::descriptor::STDERR: return "STDERR";
+  }
+}
+
 void plain_event_formatter::format(std::ostream& os, write_event const& e) {
   os << std::setw(30) << e.timestamp << std::setw(8) << e.source_pid
-     << std::setw(6) << "WRITE" << std::setw(3) << e.file_descriptor << " "
+     << std::setw(6) << "WRITE" << " " << descriptor_name(e.file_descriptor) << " "
      << unescape(e.data) << "\n";
 }

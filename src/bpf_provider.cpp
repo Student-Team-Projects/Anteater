@@ -55,6 +55,35 @@ std::optional<events::event> bpf_provider::provide() {
 }
 
 void bpf_provider::run(char *argv[]) {
+  int stdout_pipe[2];
+  int stderr_pipe[2];
+  if(pipe(stdout_pipe))
+    throw std::runtime_error{"cannot redirect stdout"};
+  
+  pid_t stdout_writer = fork();
+  if(stdout_writer == 0) {
+    close(stdout_pipe[1]);
+    dup2(stdout_pipe[0], STDIN_FILENO);
+    execl("/bin/cat", "cat", NULL);
+    exit(-1);
+  }
+
+  if(pipe(stderr_pipe))
+    throw std::runtime_error{"cannot redirect stderr"};
+  pid_t stderr_writer = fork();
+  if(stderr_writer == 0) {
+    close(stderr_pipe[1]);
+    dup2(stderr_pipe[0], STDIN_FILENO);
+    execl("/bin/cat", "cat", NULL);
+    std::cout << errno << std::endl;
+    exit(-1);
+  }
+
+  close(stdout_pipe[0]);
+  close(stderr_pipe[0]);
+  dup2(stdout_pipe[1], STDOUT_FILENO);
+  dup2(stderr_pipe[1], STDERR_FILENO);
+
   pid_t child = fork();
   int value = 0;
 
@@ -95,10 +124,14 @@ std::chrono::system_clock::time_point into_timestamp(uint64_t event_timestamp) {
 }
 
 static events::write_event from(const backend::write_event *e) {
+  events::write_event::descriptor fd = e->fd == backend::STDOUT ? 
+    events::write_event::descriptor::STDOUT :
+    events::write_event::descriptor::STDERR;
+
   return {
     e->proc,
     into_timestamp(e->timestamp),
-    e->fd,
+    fd,
     {e->data, static_cast<size_t>(e->size)},
   };
 }
