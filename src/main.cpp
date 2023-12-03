@@ -10,13 +10,13 @@
 
 #include "bpf_provider.hpp"
 #include "console_logger.hpp"
-#include "structure/plain_structure_consumer.hpp"
+#include "structure/html/html_structure_consumer.hpp"
 #include "structure/structure_provider.hpp"
 
 int main(int argc, char *argv[]) {
   bpf_provider provider;
   console_logger logger;
-  structure_provider structure(std::make_unique<plain_structure_consumer>());
+  structure_provider structure(std::make_unique<html_structure_consumer>());
   provider.run(argv + 1);
   while (provider.is_active()) {
     auto v = provider.provide();

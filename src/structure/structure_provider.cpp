@@ -15,6 +15,7 @@ void structure_provider::consume(const event& e) { std::visit(visitor, e); }
 
 void structure_provider::event_visitor::operator()(const fork_event& e) {
   provider.pid_to_children[e.source_pid].push_back(e.child_pid);
+  provider.pid_to_parent[e.child_pid] = provider.pid_to_group[e.source_pid];
   provider.pid_to_group[e.child_pid] = provider.pid_to_group[e.source_pid];
 }
 
@@ -44,9 +45,11 @@ void structure_provider::set_subtree_group(pid_t root,
   }
 }
 
-
 void structure_provider::event_visitor::operator()(const exit_event& e) {
   for (auto consumer : provider.created_groups[e.source_pid]) consumer->consume(e);
+
+  if (provider.pid_to_parent.contains(e.source_pid))
+    provider.pid_to_parent[e.source_pid]->consume(e); 
 }
 
 void structure_provider::event_visitor::operator()(const write_event& e) {
