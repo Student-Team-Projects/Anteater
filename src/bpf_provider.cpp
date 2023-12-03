@@ -158,6 +158,8 @@ static events::exec_event from(const backend::exec_event *e) {
       .timestamp = into_timestamp(e->timestamp),
     },
     .user_id = 0,
+    .user_name = "root",
+    .working_directory = "/home/pp/debugger",
     .command = command,
   };
 }

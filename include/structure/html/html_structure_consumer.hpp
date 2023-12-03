@@ -22,7 +22,7 @@ class html_structure_consumer : public structure_consumer {
     std::unique_ptr<structure_consumer> consume(events::exec_event const&);
     void consume(events::exit_event const&);
     void consume(events::write_event const&);
-    subconsumer(pid_t my_pid, std::filesystem::path filename);
+    subconsumer(events::exec_event const& source_event, std::filesystem::path filename);
     ~subconsumer();
   };
 

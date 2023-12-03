@@ -20,6 +20,8 @@ struct fork_event : event_base {
 
 struct exec_event : event_base {
   uid_t user_id;
+  std::string user_name;
+  std::string working_directory;
   std::string command;
 };
 
