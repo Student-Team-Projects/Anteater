@@ -20,6 +20,8 @@ struct fork_event : event_base {
 
 struct exec_event : event_base {
   uid_t user_id;
+  std::string user_name;
+  std::string working_directory;
   std::string command;
 };
 
@@ -28,15 +30,10 @@ struct exit_event : event_base {
 };
 
 struct write_event : event_base {
-  int file_descriptor;
+  enum class descriptor { STDOUT, STDERR } file_descriptor;
   std::string data;
 };
 
 using event = std::variant<fork_event, exec_event, exit_event, write_event>;
 
-std::ostream& operator<<(std::ostream&, const fork_event&);
-std::ostream& operator<<(std::ostream&, const exec_event&);
-std::ostream& operator<<(std::ostream&, const exit_event&);
-std::ostream& operator<<(std::ostream&, const write_event&);
-std::ostream& operator<<(std::ostream&, const event&);
 }  // namespace events

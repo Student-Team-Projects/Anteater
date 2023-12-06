@@ -11,6 +11,11 @@ enum event_type {
     WRITE
 };
 
+enum descriptor {
+    STDOUT,
+    STDERR
+};
+
 struct fork_event {
     enum event_type type;
     unsigned long long timestamp;
@@ -36,7 +41,7 @@ struct exit_event {
 struct write_event {
     enum event_type type;
     unsigned long long timestamp;
-    int fd;
+    enum descriptor fd;
     pid_t proc;
     int size;
     char data[];
@@ -83,7 +88,7 @@ static inline void make_exec_event(struct exec_event *event, pid_t proc, int arg
     event->args_size = args_size;
 }
 
-static inline void make_write_event(struct write_event *event, pid_t proc, int fd, int size) {
+static inline void make_write_event(struct write_event *event, pid_t proc, enum descriptor fd, int size) {
     event->type = WRITE;
     event->timestamp = bpf_ktime_get_ns();
     event->fd = fd;
