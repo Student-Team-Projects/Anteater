@@ -131,10 +131,14 @@ std::chrono::system_clock::time_point into_timestamp(uint64_t event_timestamp) {
 }
 
 static events::write_event from(const backend::write_event *e) {
+  events::write_event::descriptor fd = e->fd == backend::STDOUT ? 
+    events::write_event::descriptor::STDOUT :
+    events::write_event::descriptor::STDERR;
+
   return {
     e->proc,
     into_timestamp(e->timestamp),
-    (int) e->fd,
+    fd,
     {e->data, static_cast<size_t>(e->size)},
   };
 }
@@ -161,6 +165,8 @@ static events::exec_event from(const backend::exec_event *e) {
       .timestamp = into_timestamp(e->timestamp),
     },
     .user_id = 0,
+    .user_name = "root",
+    .working_directory = "/home/pp/debugger",
     .command = command,
   };
 }
