@@ -19,6 +19,8 @@ all: $(TARGET)
 $(TARGET): $(TRACER_SKEL) $(VMLINUX) $(OBJS)
 	@mkdir -p $(dir $@)
 	clang++ -std=c++20 $(OBJS) $(SRC_DIR)/main.cpp $(INCLUDE_FLAGS) -lbpf -lelf -o $@
+	sudo chown root $(TARGET)
+	sudo chmod 4755 $(TARGET)
 
 $(OBJS) : $(OBJ_DIR)/%.o : %.cpp
 	@mkdir -p $(dir $@)
@@ -65,7 +67,7 @@ $(TEST_TARGET) : $(TEST_OBJS) $(OBJS) $(TARGET) $(PROGRAM_TARGETS)
 	@mkdir -p $(dir $@)
 	clang++ -std=c++20 $(TEST_OBJS) $(OBJS) -lbpf -lelf -lgtest -lgtest_main -pthread -o $@
 
-$(TEST_OBJS) : $(OBJ_DIR)/%.o : %.cpp $(OBJ_DIR)/$(SRC_DIR)/bpf_provider.o
+$(TEST_OBJS) : $(OBJ_DIR)/%.o : %.cpp
 	@mkdir -p $(dir $@)
 	clang++ -std=c++20 $(INCLUDE_FLAGS) $(PATH_DEFINES) -c $< -o $@
 

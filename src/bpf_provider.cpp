@@ -54,6 +54,10 @@ std::optional<events::event> bpf_provider::provide() {
   return {std::move(result)};
 }
 
+static void fix_user() {
+  seteuid(getuid());
+}
+
 void bpf_provider::run(char *argv[]) {
   int stdout_pipe[2];
   int stderr_pipe[2];
@@ -62,6 +66,7 @@ void bpf_provider::run(char *argv[]) {
   
   pid_t stdout_writer = fork();
   if(stdout_writer == 0) {
+    fix_user();
     close(stdout_pipe[1]);
     dup2(stdout_pipe[0], STDIN_FILENO);
     execl("/bin/cat", "cat", NULL);
@@ -72,6 +77,7 @@ void bpf_provider::run(char *argv[]) {
     throw std::runtime_error{"cannot redirect stderr"};
   pid_t stderr_writer = fork();
   if(stderr_writer == 0) {
+    fix_user();
     close(stderr_pipe[1]);
     dup2(stderr_pipe[0], STDIN_FILENO);
     execl("/bin/cat", "cat", NULL);
@@ -91,6 +97,7 @@ void bpf_provider::run(char *argv[]) {
     pid_t pid = getpid();
     bpf_map__update_elem(skel->maps.processes, &pid, sizeof(pid), &value,
                          sizeof(value), BPF_ANY);
+    fix_user();
     execvp(argv[0], argv);
     throw std::runtime_error{"execvp() failed"};
   } else {
