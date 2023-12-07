@@ -26,6 +26,10 @@ void static_init() {
   if (setrlimit(RLIMIT_MEMLOCK, &lim))
     throw std::runtime_error{"Failed to increase RLIMIT_MEMLOCK"};
 
+  // give process highest priority.
+  // this ensures that buffers are emptied as frequently as possible.
+  setpriority(PRIO_PROCESS, getpid(), -20);
+
   called = true;
 }
 
