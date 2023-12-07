@@ -60,7 +60,7 @@ std::optional<events::event> bpf_provider::provide() {
 }
 
 static void fix_user() {
-  seteuid(getuid());
+  setuid(getuid());
 }
 
 void bpf_provider::run(char *argv[]) {

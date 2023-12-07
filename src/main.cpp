@@ -19,8 +19,10 @@ void html_version(int argc, char *argv[]) {
   provider.run(argv + 1);
   while (provider.is_active()) {
     auto v = provider.provide();
+    seteuid(getuid());
     if (v.has_value())
       structure.consume(v.value());
+    seteuid(0);
   }
 }
 
@@ -32,8 +34,10 @@ void text_version(int argc, char *argv[]) {
   provider.run(argv + 2);
   while (provider.is_active()) {
     auto v = provider.provide();
+    seteuid(getuid());
     if (v.has_value())
       logger.consume(v.value());
+    seteuid(0);
   }
 }
 
