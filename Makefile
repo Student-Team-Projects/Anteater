@@ -72,7 +72,7 @@ $(TEST_TARGET) : $(TEST_OBJS) $(OBJS) $(TARGET) $(PROGRAM_TARGETS)
 	@mkdir -p $(dir $@)
 	$(CXX) -std=c++20 $(TEST_OBJS) $(OBJS) -lbpf -lelf -lgtest -lgtest_main -pthread -o $@
 
-$(TEST_OBJS) : $(OBJ_DIR)/%.o : %.cpp
+$(TEST_OBJS) : $(OBJ_DIR)/%.o : %.cpp $(OBJ_DIR)/$(SRC_DIR)/bpf_provider.o
 	@mkdir -p $(dir $@)
 	$(CXX) -std=c++20 $(INCLUDE_FLAGS) $(PATH_DEFINES) -c $< -o $@
 
