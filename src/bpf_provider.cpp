@@ -156,7 +156,8 @@ static events::exit_event from(const backend::exit_event *e) {
 }
 
 static events::exec_event from(const backend::exec_event *e) {
-  std::string command{e->args, e->args + e->args_size};
+  std::string command{e->data, e->data + e->args_size};
+  std::string working_directory{e->data + e->args_size, e->data + e->args_size + e->pwd_size};
   std::replace(command.begin(), command.end(), '\0', ' ');
 
   return {
@@ -166,7 +167,7 @@ static events::exec_event from(const backend::exec_event *e) {
     },
     .user_id = 0,
     .user_name = "root",
-    .working_directory = "/home/pp/debugger",
+    .working_directory = working_directory,
     .command = command,
   };
 }

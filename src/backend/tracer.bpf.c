@@ -43,14 +43,55 @@ struct {
 struct {
   __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
   __type(key, u32);
-  __type(value, char[2048]);
+  __type(value, char[4096]);
   __uint(max_entries, 1);
 } aux_maps __weak SEC(".maps");
+
+#define MAX_PATH_COMPONENTS 20
+struct {
+  __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+  __type(key, u32);
+  __type(value, struct qstr [MAX_PATH_COMPONENTS]);
+  __uint(max_entries, 1);
+} path_storage __weak SEC(".maps");
 
 inline bool is_process_traced() {
   pid_t pid = bpf_get_current_pid_tgid();
   return bpf_map_lookup_elem(&processes, &pid) != NULL;
 }
+
+
+// DO NOT TOUCH. IT CAN AND WILL HURT YOU.
+// may not work with paths through multiple mountpoints.
+static inline long path_to_str(struct path *path, char *buf, int size) {
+  struct dentry *dentry = BPF_CORE_READ(path, dentry);
+  u32 key = 0;
+  struct qstr *storage = bpf_map_lookup_elem(&path_storage, &key);
+  if(storage == NULL) return -1;
+  long path_len = 0;
+  long component = 0;
+  for(; component < MAX_PATH_COMPONENTS; component++) {
+    struct dentry *parent = BPF_CORE_READ(dentry, d_parent);
+    if(dentry == parent) break;
+    storage[component] = BPF_CORE_READ(dentry, d_name);
+    path_len += storage[component].len + 1;
+    dentry = parent;
+  }
+  if(component >= MAX_PATH_COMPONENTS) return -1;
+  component--;
+  if(path_len > size) return -1;
+  char *cur = buf;
+  for(;component >= 0; component--) {
+    *(cur++) = '/';
+    struct qstr name = storage[component];
+    long ret = bpf_probe_read_kernel_str(cur, 64, name.name);
+    if(ret < 0) return -1;
+    cur += name.len;
+    if(cur >= buf + size - 64) return -1;
+  }
+  return path_len;
+}
+
 
 SEC("tp/sched/sched_process_exec")
 int handle_exec(struct trace_event_raw_sched_process_exec *ctx) {
@@ -78,20 +119,32 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx) {
     bpf_map_update_elem(&tracked_descriptors, &stderr_id, &stderr, BPF_ANY);
   }
 
+  // reserve space for event
+  u32 key = 0;
+  struct exec_event *e = bpf_map_lookup_elem(&aux_maps, &key);
+  if (e == NULL) return 0;
+
+  // find args
   u64 args_start =  BPF_CORE_READ(task, mm, arg_start);
   u64 args_end = BPF_CORE_READ(task, mm, arg_end);
   if(args_end <= args_start) return 0;
   u64 args_size = args_end - args_start - 1;
   if (args_size > 1024) args_size = 1024;
+  if (bpf_probe_read_user(e->data, args_size, (void *) args_start)) return 0;
 
-  u32 key = 0;
-  struct exec_event *e = bpf_map_lookup_elem(&aux_maps, &key);
-  if (e == NULL) return 0;
+  // find pwd
+  struct path pwd = BPF_CORE_READ(task, fs, pwd);
+  int pwd_size = path_to_str(&pwd, e->data + args_size, 1024);
+  if(pwd_size < 0) return 0;
+  if(pwd_size > 1024) return 0;
 
-  make_exec_event(e, pid, args_size);
+  make_exec_event(e, pid, args_size, pwd_size);
+  int data_size = pwd_size + args_size;
+  if(data_size < 0) return 0;
+  if(data_size > 2047) return 0;
+  data_size &= 2047;
 
-  if (bpf_probe_read_user(e->args, args_size, (void *) args_start)) return 0;
-  bpf_ringbuf_output(&queue, e, args_size + offsetof(struct exec_event, args), 0);
+  bpf_ringbuf_output(&queue, e, data_size + offsetof(struct exec_event, data), 0);
   return 0;
 }
 

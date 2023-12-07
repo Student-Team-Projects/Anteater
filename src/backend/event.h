@@ -28,7 +28,8 @@ struct exec_event {
     unsigned long long timestamp;
     pid_t proc;
     int args_size;
-    char args[];
+    int pwd_size;
+    char data[];
 };
 
 struct exit_event {
@@ -81,11 +82,12 @@ static inline void make_exit_event(struct exit_event *event, pid_t proc, int cod
     event->code = code;
 }
 
-static inline void make_exec_event(struct exec_event *event, pid_t proc, int args_size) {
+static inline void make_exec_event(struct exec_event *event, pid_t proc, int args_size, int pwd_size) {
     event->type = EXEC;
     event->timestamp = bpf_ktime_get_ns();
     event->proc = proc;
     event->args_size = args_size;
+    event->pwd_size = pwd_size;
 }
 
 static inline void make_write_event(struct write_event *event, pid_t proc, enum descriptor fd, int size) {
