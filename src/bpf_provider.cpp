@@ -162,8 +162,9 @@ static events::exit_event from(const backend::exit_event *e) {
 
 static events::exec_event from(const backend::exec_event *e) {
   std::string command{e->data, e->data + e->args_size};
-  std::string working_directory{e->data + e->args_size, e->data + e->args_size + e->pwd_size};
   std::replace(command.begin(), command.end(), '\0', ' ');
+  std::string working_directory{e->data + e->args_size, e->data + e->args_size + e->pwd_size};
+  if(working_directory == "") working_directory = "/";
   struct passwd *pws = getpwuid(e->uid);
   std::string user_name{pws->pw_name};
 
