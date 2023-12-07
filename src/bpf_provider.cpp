@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <sys/sysinfo.h>
 #include <unistd.h>
+#include <pwd.h>
 
 #include <iostream>
 #include <stdexcept>
@@ -159,6 +160,8 @@ static events::exec_event from(const backend::exec_event *e) {
   std::string command{e->data, e->data + e->args_size};
   std::string working_directory{e->data + e->args_size, e->data + e->args_size + e->pwd_size};
   std::replace(command.begin(), command.end(), '\0', ' ');
+  struct passwd *pws = getpwuid(e->uid);
+  std::string user_name{pws->pw_name};
 
   return {
     {
@@ -166,7 +169,7 @@ static events::exec_event from(const backend::exec_event *e) {
       .timestamp = into_timestamp(e->timestamp),
     },
     .user_id = 0,
-    .user_name = "root",
+    .user_name = user_name,
     .working_directory = working_directory,
     .command = command,
   };

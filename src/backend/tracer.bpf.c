@@ -98,6 +98,7 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx) {
   if (!is_process_traced()) return 0;
 
   pid_t pid = bpf_get_current_pid_tgid();
+  uid_t uid = bpf_get_current_uid_gid();
 
   struct task_struct *task = (void *) bpf_get_current_task();
 
@@ -138,7 +139,7 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx) {
   if(pwd_size < 0) return 0;
   if(pwd_size > 1024) return 0;
 
-  make_exec_event(e, pid, args_size, pwd_size);
+  make_exec_event(e, pid, uid, args_size, pwd_size);
   int data_size = pwd_size + args_size;
   if(data_size < 0) return 0;
   if(data_size > 2047) return 0;
