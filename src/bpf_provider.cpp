@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <sys/sysinfo.h>
 #include <unistd.h>
+#include <pwd.h>
 
 #include <iostream>
 #include <stdexcept>
@@ -24,6 +25,10 @@ void static_init() {
 
   if (setrlimit(RLIMIT_MEMLOCK, &lim))
     throw std::runtime_error{"Failed to increase RLIMIT_MEMLOCK"};
+
+  // give process highest priority.
+  // this ensures that buffers are emptied as frequently as possible.
+  setpriority(PRIO_PROCESS, getpid(), -20);
 
   called = true;
 }
@@ -54,6 +59,10 @@ std::optional<events::event> bpf_provider::provide() {
   return {std::move(result)};
 }
 
+static void fix_user() {
+  setuid(getuid());
+}
+
 void bpf_provider::run(char *argv[]) {
   int stdout_pipe[2];
   int stderr_pipe[2];
@@ -62,6 +71,7 @@ void bpf_provider::run(char *argv[]) {
   
   pid_t stdout_writer = fork();
   if(stdout_writer == 0) {
+    fix_user();
     close(stdout_pipe[1]);
     dup2(stdout_pipe[0], STDIN_FILENO);
     execl("/bin/cat", "cat", NULL);
@@ -72,6 +82,7 @@ void bpf_provider::run(char *argv[]) {
     throw std::runtime_error{"cannot redirect stderr"};
   pid_t stderr_writer = fork();
   if(stderr_writer == 0) {
+    fix_user();
     close(stderr_pipe[1]);
     dup2(stderr_pipe[0], STDIN_FILENO);
     execl("/bin/cat", "cat", NULL);
@@ -91,6 +102,7 @@ void bpf_provider::run(char *argv[]) {
     pid_t pid = getpid();
     bpf_map__update_elem(skel->maps.processes, &pid, sizeof(pid), &value,
                          sizeof(value), BPF_ANY);
+    fix_user();
     execvp(argv[0], argv);
     throw std::runtime_error{"execvp() failed"};
   } else {
@@ -147,8 +159,12 @@ static events::exit_event from(const backend::exit_event *e) {
 }
 
 static events::exec_event from(const backend::exec_event *e) {
-  std::string command{e->args, e->args + e->args_size};
+  std::string command{e->data, e->data + e->args_size};
   std::replace(command.begin(), command.end(), '\0', ' ');
+  std::string working_directory{e->data + e->args_size, e->data + e->args_size + e->working_directory_size};
+  if(working_directory == "") working_directory = "/";
+  struct passwd *pws = getpwuid(e->uid);
+  std::string user_name{pws->pw_name};
 
   return {
     {
@@ -156,8 +172,8 @@ static events::exec_event from(const backend::exec_event *e) {
       .timestamp = into_timestamp(e->timestamp),
     },
     .user_id = 0,
-    .user_name = "root",
-    .working_directory = "/home/pp/debugger",
+    .user_name = user_name,
+    .working_directory = working_directory,
     .command = command,
   };
 }

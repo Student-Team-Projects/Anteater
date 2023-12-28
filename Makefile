@@ -24,6 +24,8 @@ all: $(TARGET)
 $(TARGET): $(TRACER_SKEL) $(VMLINUX) $(OBJS)
 	@mkdir -p $(dir $@)
 	$(CXX) -std=c++20 $(OBJS) $(SRC_DIR)/main.cpp $(INCLUDE_FLAGS) -lbpf -lelf -o $@
+	sudo chown root $(TARGET)
+	sudo chmod 4755 $(TARGET)
 
 $(OBJS) : $(OBJ_DIR)/%.o : %.cpp
 	@mkdir -p $(dir $@)
