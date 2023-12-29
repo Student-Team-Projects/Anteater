@@ -65,8 +65,8 @@ void html_event_formatter::format(std::ostream& os, fork_event const& e) {
 
 void html_event_formatter::format(std::ostream& os, exit_event const& e) {
     os << "<tr class='event'>"
-        << "<td><pre>" << e.timestamp << "</pre></td>"
-        << "<td><pre>" << "EXIT " << e.exit_code << "</td></pre>"
+        << "<td>" << e.timestamp << "</td>"
+        << "<td>" << "EXIT " << e.exit_code << "</td>"
         << "</tr>";
 
     os << "<script>"
@@ -84,14 +84,14 @@ void html_event_formatter::child_exit(std::ostream& os, exit_event const& e) {
 
 void html_event_formatter::format(std::ostream& os, exec_event const& e, std::filesystem::path child_link) {
     os << "<tr class='event'>"
-        << "<td><pre>" << e.timestamp << "</pre></td>"
+        << "<td>" << e.timestamp << "</td>"
         << "<td>"
-        << "<div style='display: flex;gap: 5px;'>"
-        << "<pre id='child_exit_code_" << e.source_pid << "'>exit ?</pre>"
+        << "<span style='display: flex;gap: 5px;'>"
+        << "<span id='child_exit_code_" << e.source_pid << "'>exit ?&nbsp</span>"
         << "<a href='./" << child_link.string() << "'>"
         << e.command
         << "</a>"
-        << "</pre></div></td>"
+        << "</span></td>"
         << "</tr>";
     os.flush();
 }
@@ -100,8 +100,8 @@ void html_event_formatter::format(std::ostream& os, write_event const& e) {
     std::string style = e.file_descriptor == write_event::descriptor::STDERR ? "style='color: #f5a142;'" : "";
 
     os << "<tr class='event'>"
-        << "<td><pre>" << e.timestamp << "</pre></td>"
-        << "<td><pre " << style << ">" << e.data << "</td></pre>"
+        << "<td>" << e.timestamp << "</td>"
+        << "<td><span " << style << ">" << e.data << "</td></span>"
         << "</tr>";
     os.flush();
 }
