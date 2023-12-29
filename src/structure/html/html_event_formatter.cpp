@@ -88,7 +88,7 @@ void html_event_formatter::format(std::ostream& os, exec_event const& e, std::fi
         << "<td>"
         << "<div style='display: flex;gap: 5px;'>"
         << "<pre id='child_exit_code_" << e.source_pid << "'>exit ?</pre>"
-        << "<a href='" << child_link.string() << "'>"
+        << "<a href='./" << child_link.string() << "'>"
         << "<pre>" << e.command  << "</pre>"
         << "</a>"
         << "</pre></div></td>"
