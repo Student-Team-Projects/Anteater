@@ -6,7 +6,7 @@
 
 struct html_event_formatter
 {
-    void begin(std::ostream&, events::exec_event const& source_event);
+    void begin(std::ostream&, events::exec_event const& source_event, std::optional<std::filesystem::path>);
     void end(std::ostream&);
     void child_exit(std::ostream& os, events::exit_event const& pid);
     void format(std::ostream&, events::fork_event const&);

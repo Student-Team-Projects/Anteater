@@ -24,7 +24,7 @@ const std::string CSS = R"(
     </style>
 )";
 
-void format_page_header(std::ostream& os, exec_event const& source_event) {
+static void format_page_header(std::ostream& os, exec_event const& source_event, std::optional<std::filesystem::path> parent_path) {
     os << "<table><tbody>";
 
     os << "<tr>" << "<td> account </td>" << "<td>" << source_event.user_name << "</td>" << "</tr>";
@@ -33,11 +33,15 @@ void format_page_header(std::ostream& os, exec_event const& source_event) {
     os << "<tr>" << "<td> timestamp </td>" << "<td>" << source_event.timestamp << "</td>" << "</tr>";
     os << "<tr>" << "<td> exit code </td>" << "<td id='exit_code'>" << "?" << "</td>" << "</tr>";
 
+    if(parent_path.has_value()) {
+        os << "<tr>" << "<td> parent </td>" << "<td> <a href='./" << parent_path.value().string() << "'> link </a>" << "</td></tr>";
+    }
+
     os << "</tbody></table>";
     os << "<hr>";
 }
 
-void html_event_formatter::begin(std::ostream& os, exec_event const& source_event) {
+void html_event_formatter::begin(std::ostream& os, exec_event const& source_event, std::optional<std::filesystem::path> parent_path) {
     os << "<!DOCTYPE HTML>"
         << "<html lang='pl-PL'>"
 
@@ -48,7 +52,7 @@ void html_event_formatter::begin(std::ostream& os, exec_event const& source_even
 
         << "<body>";
 
-    format_page_header(os, source_event);
+    format_page_header(os, source_event, parent_path);
 
     os << "<table><tbody>";
     os.flush();

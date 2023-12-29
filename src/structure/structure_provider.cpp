@@ -21,10 +21,14 @@ void structure_provider::event_visitor::operator()(const fork_event& e) {
 
 void structure_provider::event_visitor::operator()(const exec_event& e) {
   std::unique_ptr<structure_consumer> new_consumer;
-  if (!provider.pid_to_group.contains(e.source_pid))
+
+  if (!provider.pid_to_group.contains(e.source_pid)) {
     new_consumer = provider.root->consume(e);
-  else
-    new_consumer = provider.pid_to_group[e.source_pid]->consume(e);
+  }
+  else {
+    structure_consumer* parent = provider.pid_to_parent[e.source_pid];
+    new_consumer = provider.pid_to_group[e.source_pid]->consume(e, parent);
+  }
 
   provider.created_groups[e.source_pid].push_back(new_consumer.get());
   provider.set_subtree_group(e.source_pid, new_consumer.get());

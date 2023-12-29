@@ -19,16 +19,17 @@ class html_structure_consumer : public structure_consumer {
 
    public:
     void consume(events::fork_event const&);
-    std::unique_ptr<structure_consumer> consume(events::exec_event const&);
+    std::unique_ptr<structure_consumer> consume(events::exec_event const&, structure_consumer* parent=nullptr);
     void consume(events::exit_event const&);
     void consume(events::write_event const&);
     subconsumer(events::exec_event const& source_event, std::filesystem::path filename);
+    subconsumer(events::exec_event const& source_event, std::filesystem::path filename, std::filesystem::path parent_path);
     ~subconsumer();
   };
 
  public:
   void consume(events::fork_event const&) {}
-  std::unique_ptr<structure_consumer> consume(events::exec_event const&);
+  std::unique_ptr<structure_consumer> consume(events::exec_event const&, structure_consumer*);
   void consume(events::exit_event const&) {}
   void consume(events::write_event const&) {}
 };
