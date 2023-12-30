@@ -1,5 +1,7 @@
 #include "structure/html/html_event_formatter.hpp"
 
+#include <regex>
+
 using namespace events;
 
 const std::string CSS = R"(
@@ -102,12 +104,19 @@ void html_event_formatter::format(std::ostream& os, exec_event const& e, std::fi
     os.flush();
 }
 
+static std::string remove_ansi_encoding(std::string const& str) {
+    // This regex comes from the following site: https://stackoverflow.com/questions/14693701/how-can-i-remove-the-ansi-escape-sequences-from-a-string-in-python
+    // Published by Martijn Pieters on CC-BY-SA license.
+    std::regex regex("\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])");
+    return std::regex_replace(str, regex, "");
+}
+
 void html_event_formatter::format(std::ostream& os, write_event const& e) {
     std::string style = e.file_descriptor == write_event::descriptor::STDERR ? "style='color: #f5a142;'" : "";
 
     os << "<tr class='event'>"
         << "<td>" << e.timestamp << "</td>"
-        << "<td><span " << style << ">" << e.data << "</td></span>"
+        << "<td><span " << style << ">" << remove_ansi_encoding(e.data) << "</td></span>"
         << "</tr>";
     os.flush();
 }
