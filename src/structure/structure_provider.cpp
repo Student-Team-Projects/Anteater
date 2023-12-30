@@ -26,8 +26,12 @@ void structure_provider::event_visitor::operator()(const exec_event& e) {
     new_consumer = provider.root->consume(e);
   }
   else {
-    structure_consumer* parent = provider.pid_to_parent[e.source_pid];
-    new_consumer = provider.pid_to_group[e.source_pid]->consume(e, parent);
+    if (provider.pid_to_parent.contains(e.source_pid)) {
+      structure_consumer* parent = provider.pid_to_parent[e.source_pid];
+      new_consumer = provider.pid_to_group[e.source_pid]->consume(e, parent);
+    } else {
+      new_consumer = provider.pid_to_group[e.source_pid]->consume(e);
+    }
   }
 
   provider.created_groups[e.source_pid].push_back(new_consumer.get());

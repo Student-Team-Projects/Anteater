@@ -65,7 +65,13 @@ std::unique_ptr<structure_consumer> html_structure_consumer::subconsumer::consum
   html_structure_consumer::subconsumer* casted_parent = dynamic_cast<html_structure_consumer::subconsumer*>(parent);
 
   std::filesystem::path subfilename = filename.parent_path() / childname;
-  return std::make_unique<html_structure_consumer::subconsumer>(e, subfilename, casted_parent->filename.filename(), casted_parent->command);
+
+  if (casted_parent == nullptr) {
+    return std::make_unique<html_structure_consumer::subconsumer>(e, subfilename);
+  } else {
+    return std::make_unique<html_structure_consumer::subconsumer>(e, subfilename, casted_parent->filename.filename(), casted_parent->command);
+  }
+
 }
 
 void html_structure_consumer::subconsumer::consume(events::exit_event const& e) {
