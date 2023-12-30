@@ -14,7 +14,7 @@ static std::string normalize_string(std::string name) {
         name.begin(),
         name.end(),
         [](char ch){
-          return (!::isascii(ch) || ::ispunct(ch));
+          return (!::isascii(ch) || ::ispunct(ch) || iscntrl(ch));
         }, 
         '-'      
     );
