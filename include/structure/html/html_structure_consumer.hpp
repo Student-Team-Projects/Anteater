@@ -16,6 +16,7 @@ class html_structure_consumer : public structure_consumer {
     std::ofstream file;
     html_event_formatter fmt;
     pid_t my_pid;
+    std::string command;
 
    public:
     void consume(events::fork_event const&);
@@ -23,7 +24,7 @@ class html_structure_consumer : public structure_consumer {
     void consume(events::exit_event const&);
     void consume(events::write_event const&);
     subconsumer(events::exec_event const& source_event, std::filesystem::path filename);
-    subconsumer(events::exec_event const& source_event, std::filesystem::path filename, std::filesystem::path parent_path);
+    subconsumer(events::exec_event const& source_event, std::filesystem::path filename, std::filesystem::path parent_path, std::string const& parent_command);
     ~subconsumer();
   };
 

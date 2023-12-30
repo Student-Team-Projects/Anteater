@@ -41,18 +41,18 @@ std::unique_ptr<structure_consumer> html_structure_consumer::consume(events::exe
 }
 
 html_structure_consumer::subconsumer::subconsumer(events::exec_event const& source_event, std::filesystem::path filename)
-    : my_pid(source_event.source_pid), filename(filename) {
+    : my_pid(source_event.source_pid), filename(filename), command(source_event.command) {
   std::filesystem::create_directories(filename.parent_path());
   file.open(filename);
-  fmt.begin(file, source_event, {});
+  fmt.begin(file, source_event, {}, {});
 }
 
-html_structure_consumer::subconsumer::subconsumer(events::exec_event const& source_event, std::filesystem::path filename, std::filesystem::path parent_filename)
-    : my_pid(source_event.source_pid), filename(filename) {
+html_structure_consumer::subconsumer::subconsumer(events::exec_event const& source_event, std::filesystem::path filename, std::filesystem::path parent_filename, std::string const& parent_command)
+    : my_pid(source_event.source_pid), filename(filename), command(source_event.command) {
   std::filesystem::create_directories(filename.parent_path());
 
   file.open(filename);
-  fmt.begin(file, source_event, {parent_filename});
+  fmt.begin(file, source_event, {parent_filename}, {parent_command});
 }
 
 void html_structure_consumer::subconsumer::consume(events::fork_event const& e) {
@@ -65,7 +65,7 @@ std::unique_ptr<structure_consumer> html_structure_consumer::subconsumer::consum
   html_structure_consumer::subconsumer* casted_parent = dynamic_cast<html_structure_consumer::subconsumer*>(parent);
 
   std::filesystem::path subfilename = filename.parent_path() / childname;
-  return std::make_unique<html_structure_consumer::subconsumer>(e, subfilename, casted_parent->filename.filename());
+  return std::make_unique<html_structure_consumer::subconsumer>(e, subfilename, casted_parent->filename.filename(), casted_parent->command);
 }
 
 void html_structure_consumer::subconsumer::consume(events::exit_event const& e) {

@@ -24,7 +24,7 @@ const std::string CSS = R"(
     </style>
 )";
 
-static void format_page_header(std::ostream& os, exec_event const& source_event, std::optional<std::filesystem::path> parent_path) {
+static void format_page_header(std::ostream& os, exec_event const& source_event, std::optional<std::filesystem::path> parent_path, std::optional<std::string> const& parent_command) {
     os << "<table><tbody>";
 
     os << "<tr>" << "<td> account </td>" << "<td>" << source_event.user_name << "</td>" << "</tr>";
@@ -34,14 +34,16 @@ static void format_page_header(std::ostream& os, exec_event const& source_event,
     os << "<tr>" << "<td> exit code </td>" << "<td id='exit_code'>" << "?" << "</td>" << "</tr>";
 
     if(parent_path.has_value()) {
-        os << "<tr>" << "<td> parent </td>" << "<td> <a href='./" << parent_path.value().string() << "'> link </a>" << "</td></tr>";
+        os << "<tr>" << "<td> parent </td>";
+        os << "<td> <a href='./" << parent_path.value().string() << "'>";
+        os << parent_command.value_or("link") << " </a>" << "</td></tr>";
     }
 
     os << "</tbody></table>";
     os << "<hr>";
 }
 
-void html_event_formatter::begin(std::ostream& os, exec_event const& source_event, std::optional<std::filesystem::path> parent_path) {
+void html_event_formatter::begin(std::ostream& os, exec_event const& source_event, std::optional<std::filesystem::path> parent_path, std::optional<std::string> const& parent_command) {
     os << "<!DOCTYPE HTML>"
         << "<html lang='pl-PL'>"
 
@@ -52,7 +54,7 @@ void html_event_formatter::begin(std::ostream& os, exec_event const& source_even
 
         << "<body>";
 
-    format_page_header(os, source_event, parent_path);
+    format_page_header(os, source_event, parent_path, parent_command);
 
     os << "<table><tbody>";
     os.flush();
