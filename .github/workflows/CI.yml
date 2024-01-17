@@ -11,7 +11,7 @@ jobs:
       #     echo | sudo ./llvm.sh 17
       #     rm llvm.sh
       - name: Install other dependencies
-        run: sudo apt-get install libgtest-dev libelf-dev
+        run: sudo apt-get install libgtest-dev libelf-dev libboost-all-dev
       - name: Install libbpf
         run: |
           git clone https://github.com/libbpf/libbpf
