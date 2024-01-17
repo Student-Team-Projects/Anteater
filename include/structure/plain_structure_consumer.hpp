@@ -14,7 +14,7 @@ class plain_structure_consumer : public structure_consumer {
 
    public:
     void consume(events::fork_event const&);
-    std::unique_ptr<structure_consumer> consume(events::exec_event const&, structure_consumer* parent=nullptr);
+    std::unique_ptr<structure_consumer> consume(events::exec_event const&);
     void consume(events::exit_event const&);
     void consume(events::write_event const&);
     subconsumer(std::filesystem::path filename);
@@ -22,7 +22,7 @@ class plain_structure_consumer : public structure_consumer {
 
  public:
   void consume(events::fork_event const&) {}
-  std::unique_ptr<structure_consumer> consume(events::exec_event const&, structure_consumer* parent);
+  std::unique_ptr<structure_consumer> consume(events::exec_event const&);
   void consume(events::exit_event const&) {}
   void consume(events::write_event const&) {}
 };

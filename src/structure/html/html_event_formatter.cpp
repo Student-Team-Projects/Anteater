@@ -86,7 +86,7 @@ void html_event_formatter::format(std::ostream& os, exit_event const& e) {
 void html_event_formatter::child_exit(std::ostream& os, exit_event const& e) {
     os << "<script>"
         << "if (document.getElementById('child_exit_code_" << e.source_pid << "'))"
-        << "document.getElementById('child_exit_code_" << e.source_pid << "').textContent = " << "'exit " << e.exit_code << "'"
+        << "document.getElementById('child_exit_code_" << e.source_pid << "').innerHTML = " << "'exit&nbsp;" << e.exit_code << "&nbsp;'"
         << "</script>";
 }
 
@@ -95,7 +95,7 @@ void html_event_formatter::format(std::ostream& os, exec_event const& e, std::fi
         << "<td>" << e.timestamp << "</td>"
         << "<td>"
         << "<span style='display: flex;gap: 5px;'>"
-        << "<span id='child_exit_code_" << e.source_pid << "'>exit ?&nbsp</span>"
+        << "<span id='child_exit_code_" << e.source_pid << "'>exit&nbsp;?&nbsp;</span>"
         << "<a href='./" << child_link.string() << "'>"
         << e.command
         << "</a>"
@@ -108,7 +108,8 @@ static std::string remove_ansi_encoding(std::string const& str) {
     // This regex comes from the following site: https://stackoverflow.com/questions/14693701/how-can-i-remove-the-ansi-escape-sequences-from-a-string-in-python
     // Published by Martijn Pieters on CC-BY-SA license.
     std::regex regex("\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])");
-    return std::regex_replace(str, regex, "");
+    std::string result = std::regex_replace(str, std::regex{" "}, "&nbsp;");
+    return std::regex_replace(result, regex, "");
 }
 
 void html_event_formatter::format(std::ostream& os, write_event const& e) {

@@ -14,33 +14,31 @@ structure_provider::event_visitor::event_visitor(structure_provider& provider)
 void structure_provider::consume(const event& e) { std::visit(visitor, e); }
 
 void structure_provider::event_visitor::operator()(const fork_event& e) {
+  // Fork creates a new process which belongs to the same group as the parent
   provider.pid_to_children[e.source_pid].push_back(e.child_pid);
-  provider.pid_to_parent[e.child_pid] = provider.pid_to_group[e.source_pid];
   provider.pid_to_group[e.child_pid] = provider.pid_to_group[e.source_pid];
 }
 
 void structure_provider::event_visitor::operator()(const exec_event& e) {
-  std::unique_ptr<structure_consumer> new_consumer;
+  // Exec creates a new "program" which belongs to a separate group
 
-  if (!provider.pid_to_group.contains(e.source_pid)) {
-    new_consumer = provider.root->consume(e);
-  }
-  else {
-    if (provider.pid_to_parent.contains(e.source_pid)) {
-      structure_consumer* parent = provider.pid_to_parent[e.source_pid];
-      new_consumer = provider.pid_to_group[e.source_pid]->consume(e, parent);
-    } else {
-      new_consumer = provider.pid_to_group[e.source_pid]->consume(e);
-    }
-  }
-
-  provider.created_groups[e.source_pid].push_back(new_consumer.get());
+  structure_consumer* parent;
+  // The only process that we didn't create a group for is the root
+  if (!provider.pid_to_group.contains(e.source_pid))
+    parent = provider.root.get();
+  else
+    parent = provider.pid_to_group[e.source_pid];
+  
+  std::unique_ptr<structure_consumer> new_consumer = parent->consume(e);
+  provider.pid_to_exec_groups[e.source_pid].push_back(parent);
   provider.set_subtree_group(e.source_pid, new_consumer.get());
   provider.structure_consumers.push_back(std::move(new_consumer));
 }
 
-void structure_provider::set_subtree_group(pid_t root,
-                                           structure_consumer* group) {
+void structure_provider::set_subtree_group(pid_t root, structure_consumer* group) {
+  // When process execs (i.e. creates a new program) all its children change the group
+
+  // Traverse the process tree using DFS
   std::stack<pid_t> pids;
   pids.push(root);
 
@@ -54,10 +52,9 @@ void structure_provider::set_subtree_group(pid_t root,
 }
 
 void structure_provider::event_visitor::operator()(const exit_event& e) {
-  for (auto consumer : provider.created_groups[e.source_pid]) consumer->consume(e);
-
-  if (provider.pid_to_parent.contains(e.source_pid))
-    provider.pid_to_parent[e.source_pid]->consume(e); 
+  provider.pid_to_group[e.source_pid]->consume(e);
+  for (auto group : provider.pid_to_exec_groups[e.source_pid])
+    group->consume(e);
 }
 
 void structure_provider::event_visitor::operator()(const write_event& e) {

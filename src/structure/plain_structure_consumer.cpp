@@ -16,7 +16,7 @@ std::string event_to_filename(events::exec_event const& e) {
 }
 
 
-std::unique_ptr<structure_consumer> plain_structure_consumer::consume(events::exec_event const& e, structure_consumer*) {
+std::unique_ptr<structure_consumer> plain_structure_consumer::consume(events::exec_event const& e) {
   std::string filename = event_to_filename(e);
   std::filesystem::path path = PLAIN_LOGS_ROOT / filename / (filename + ".txt");
   return std::make_unique<subconsumer>(path);
@@ -31,7 +31,7 @@ plain_structure_consumer::subconsumer::subconsumer(std::filesystem::path filenam
 void plain_structure_consumer::subconsumer::consume(events::fork_event const& e) {
   fmt.format(file, e);
 }
-std::unique_ptr<structure_consumer> plain_structure_consumer::subconsumer::consume(events::exec_event const& e, structure_consumer*) {
+std::unique_ptr<structure_consumer> plain_structure_consumer::subconsumer::consume(events::exec_event const& e) {
   fmt.format(file, e);
 
   std::filesystem::path subfilename = filename.parent_path() / (event_to_filename(e) + ".txt");

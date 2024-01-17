@@ -35,7 +35,7 @@ static std::string event_to_filename(events::exec_event const& e) {
 }
 
 
-std::unique_ptr<structure_consumer> html_structure_consumer::consume(events::exec_event const& e, structure_consumer*) {
+std::unique_ptr<structure_consumer> html_structure_consumer::consume(events::exec_event const& e) {
   std::string filename = event_to_filename(e);
   std::filesystem::path path = HTML_LOGS_ROOT / filename / (filename + ".html");
   return std::make_unique<subconsumer>(e, path);
@@ -59,27 +59,18 @@ html_structure_consumer::subconsumer::subconsumer(events::exec_event const& sour
 void html_structure_consumer::subconsumer::consume(events::fork_event const& e) {
 }
 
-std::unique_ptr<structure_consumer> html_structure_consumer::subconsumer::consume(events::exec_event const& e, structure_consumer* parent) {
+std::unique_ptr<structure_consumer> html_structure_consumer::subconsumer::consume(events::exec_event const& e) {
   std::filesystem::path childname = event_to_filename(e) + ".html";
   fmt.format(file, e, childname);
 
-  html_structure_consumer::subconsumer* casted_parent = dynamic_cast<html_structure_consumer::subconsumer*>(parent);
-
   std::filesystem::path subfilename = filename.parent_path() / childname;
-
-  if (casted_parent == nullptr) {
-    return std::make_unique<html_structure_consumer::subconsumer>(e, subfilename);
-  } else {
-    return std::make_unique<html_structure_consumer::subconsumer>(e, subfilename, casted_parent->filename.filename(), casted_parent->command);
-  }
-
+  return std::make_unique<html_structure_consumer::subconsumer>(e, subfilename, this->filename.filename(), this->command);
 }
 
 void html_structure_consumer::subconsumer::consume(events::exit_event const& e) {
   if (e.source_pid == my_pid)
     fmt.format(file, e);
-  else
-    fmt.child_exit(file, e);
+  fmt.child_exit(file, e);
 }
 
 void html_structure_consumer::subconsumer::consume(events::write_event const& e) {

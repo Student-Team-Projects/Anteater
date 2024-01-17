@@ -25,11 +25,8 @@ class structure_provider : public events::event_consumer {
   // Children created by forks
   std::map<pid_t, std::vector<pid_t>> pid_to_children;
 
-  // Parents
-  std::map<pid_t, structure_consumer*> pid_to_parent;
-
-  // All groups created by a process (i.e. all execs made)
-  std::map<pid_t, std::vector<structure_consumer*>> created_groups;
+  // For each process, the groups that contain the exec of it
+  std::map<pid_t, std::vector<structure_consumer*>> pid_to_exec_groups;  
 
   struct event_visitor {
     structure_provider& provider;
