@@ -17,12 +17,14 @@ void html_version(int argc, char *argv[]) {
   bpf_provider provider;
   structure_provider structure(std::make_unique<html_structure_consumer>());
   provider.run(argv + 1);
+  //set uid only for current thread (breaking posix)
+  syscall(SYS_setuid, getuid());
+
+  //busy waiting
   while (provider.is_active()) {
     auto v = provider.provide();
-    seteuid(getuid());
     if (v.has_value())
       structure.consume(v.value());
-    seteuid(0);
   }
 }
 
@@ -32,12 +34,14 @@ void text_version(int argc, char *argv[]) {
   bpf_provider provider;
   console_logger logger;
   provider.run(argv + 2);
+
+  syscall(SYS_setuid, getuid());
+
+  //busy waiting
   while (provider.is_active()) {
     auto v = provider.provide();
-    seteuid(getuid());
     if (v.has_value())
       logger.consume(v.value());
-    seteuid(0);
   }
 }
 

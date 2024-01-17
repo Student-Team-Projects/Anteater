@@ -7,7 +7,10 @@
 #include <pwd.h>
 
 #include <iostream>
+#include <thread>
 #include <stdexcept>
+
+#include <boost/lockfree/spsc_queue.hpp>
 
 #include "backend/event.h"
 
@@ -26,14 +29,12 @@ void static_init() {
   if (setrlimit(RLIMIT_MEMLOCK, &lim))
     throw std::runtime_error{"Failed to increase RLIMIT_MEMLOCK"};
 
-  // give process highest priority.
-  // this ensures that buffers are emptied as frequently as possible.
-  setpriority(PRIO_PROCESS, getpid(), -20);
 
   called = true;
 }
 
-bpf_provider::bpf_provider() {
+
+bpf_provider::bpf_provider() : interthread_queue{2048} {
   static_init();
 
   skel = tracer::open_and_load();
@@ -42,21 +43,41 @@ bpf_provider::bpf_provider() {
                             this, nullptr);
 };
 
-bpf_provider::~bpf_provider() {
+void bpf_provider::main_loop() {
+  // give thread highest priority.
+  // this ensures that buffers are emptied as frequently as possible.
+  // probably also breaks posix
+  setpriority(PRIO_PROCESS, gettid(), -20);
+
+  while(!tracked_processes.empty() || !messages.empty()) {
+    while (messages.empty() || interthread_queue.write_available() == 0) 
+      ring_buffer__poll(buffer, 100);
+    while(!messages.empty() && interthread_queue.write_available() > 0) {
+      auto message = messages.front();
+      messages.pop();
+      interthread_queue.push(std::move(message));
+    }
+  }
+  active = false;
   tracer::detach(skel);
   tracer::destroy(skel);
+}
+
+
+bpf_provider::~bpf_provider() {
+  receiver_thread.join();
 };
 
 bool bpf_provider::is_active() {
-  return !tracked_processes.empty() || !messages.empty();
+  return active || interthread_queue.read_available() > 0;
 }
 
 std::optional<events::event> bpf_provider::provide() {
-  if (messages.empty()) ring_buffer__poll(buffer, 100);
-  if (messages.empty()) return {};
-  auto result = messages.front();
-  messages.pop();
-  return {std::move(result)};
+  events::event result;
+  if(interthread_queue.pop(result))
+    return {std::move(result)};
+  else
+    return {};
 }
 
 static void fix_user() {
@@ -108,6 +129,9 @@ void bpf_provider::run(char *argv[]) {
   } else {
     tracked_processes.insert(child);
   }
+
+  active = true;
+  receiver_thread = std::thread {&bpf_provider::main_loop, this};
 }
 
 /**
