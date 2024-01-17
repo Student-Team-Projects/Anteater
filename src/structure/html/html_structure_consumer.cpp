@@ -10,16 +10,17 @@ const std::filesystem::path HTML_LOGS_ROOT = "logs/html";
 
 // Lynx does not work well with filenames that have colons in them
 static std::string normalize_string(std::string name) {
-    std::replace_if(
-        name.begin(),
-        name.end(),
-        [](char ch){
-          return (!::isascii(ch) || ::ispunct(ch) || iscntrl(ch));
-        }, 
-        '-'      
-    );
-
-    return name;
+  if(name.size() > 64)
+    name = name.substr(0, 64);
+  std::replace_if(
+      name.begin(),
+      name.end(),
+      [](char ch){
+        return (!::isascii(ch) || ::ispunct(ch) || iscntrl(ch));
+      }, 
+      '-'      
+  );
+  return name;
 }
 
 static std::string event_to_filename(events::exec_event const& e) {
