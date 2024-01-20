@@ -15,7 +15,7 @@
 
 void html_version(int argc, char *argv[]) {
   bpf_provider provider;
-  structure_provider structure(std::make_unique<html_structure_consumer>());
+  structure_provider structure(std::make_unique<html_structure_consumer_root>());
   provider.run(argv + 1);
   //set uid only for current thread (breaking posix)
   syscall(SYS_setuid, getuid());
