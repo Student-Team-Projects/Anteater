@@ -5,9 +5,6 @@
 #include <sstream>
 #include <algorithm>
 
-// const std::filesystem::path HTML_LOGS_ROOT = "/var/lib/debugger/logs/html";
-const std::filesystem::path HTML_LOGS_ROOT = "logs/html";
-
 // Lynx does not work well with filenames that have colons in them
 static std::string normalize_string(std::string name) {
   if(name.size() > 64)
@@ -56,15 +53,17 @@ static void update_index(
   file.close();
 }
 
+html_structure_consumer_root::html_structure_consumer_root(std::filesystem::path logs_directory) : logs_directory(logs_directory) {}
+
 std::unique_ptr<structure_consumer> html_structure_consumer_root::consume(events::exec_event const& e) {
   std::string filename = event_to_filename(e);
-  std::filesystem::path path = HTML_LOGS_ROOT / filename / (filename + ".html");
+  std::filesystem::path path = logs_directory / filename / (filename + ".html");
   root_info = {
     e.command,
     "./" + path.filename().string(),
     "../index.html"
   };
-  update_index(fmt, e.timestamp, HTML_LOGS_ROOT / "index.html", path, e.command);
+  update_index(fmt, e.timestamp, logs_directory / "index.html", path, e.command);
   return std::make_unique<html_structure_consumer>(fmt, e, path, root_info);
 }
 

@@ -5,8 +5,6 @@
 #include <sstream>
 #include <algorithm>
 
-const std::filesystem::path PLAIN_LOGS_ROOT = "/var/lib/debugger/logs/plain";
-
 std::string event_to_filename(events::exec_event const& e) {
   std::string cmd = e.command;
   std::replace(cmd.begin(), cmd.end(), '/', '_');
@@ -15,10 +13,11 @@ std::string event_to_filename(events::exec_event const& e) {
   return ss.str();
 }
 
+plain_structure_consumer::plain_structure_consumer(std::filesystem::path logs_directory) : logs_directory(logs_directory) {}
 
 std::unique_ptr<structure_consumer> plain_structure_consumer::consume(events::exec_event const& e) {
   std::string filename = event_to_filename(e);
-  std::filesystem::path path = PLAIN_LOGS_ROOT / filename / (filename + ".txt");
+  std::filesystem::path path = logs_directory / filename / (filename + ".txt");
   return std::make_unique<subconsumer>(path);
 }
 

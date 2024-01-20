@@ -14,8 +14,10 @@
 class html_structure_consumer_root : public structure_consumer {
   root_path_info root_info;
   html_event_formatter fmt;
+  std::filesystem::path logs_directory;
 
 public:
+  html_structure_consumer_root(std::filesystem::path logs_directory);
   void consume(events::fork_event const&) {}
   std::unique_ptr<structure_consumer> consume(events::exec_event const&);
   void consume(events::exit_event const&) {}
