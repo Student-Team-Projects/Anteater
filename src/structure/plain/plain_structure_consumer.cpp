@@ -1,4 +1,4 @@
-#include "structure/plain_structure_consumer.hpp"
+#include "structure/plain/plain_structure_consumer.hpp"
 
 #include <cstring>
 #include <iostream>
