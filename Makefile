@@ -19,13 +19,21 @@ SRCS := $(shell find $(SRC_DIR) ! -name "main.cpp" -name "*.cpp")
 OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o, $(SRCS))
 TARGET := $(BIN_DIR)/main
 
-all: $(TARGET)
+all: permissions-sudo
+build: $(TARGET)
 
 $(TARGET): $(TRACER_SKEL) $(VMLINUX) $(OBJS) $(SRC_DIR)/main.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) -std=c++20 $(OBJS) $(SRC_DIR)/main.cpp $(INCLUDE_FLAGS) -lbpf -lelf -o $@
+
+permissions: $(TARGET)
+	chown root $(TARGET)
+	chmod 4755 $(TARGET)
+
+permissions-sudo: $(TARGET)
 	sudo chown root $(TARGET)
 	sudo chmod 4755 $(TARGET)
+
 
 $(OBJS) : $(OBJ_DIR)/%.o : %.cpp
 	@mkdir -p $(dir $@)
@@ -80,7 +88,7 @@ $(PROGRAM_TARGETS) : $(BIN_DIR)/programs/% : $(PROGRAM_SRC_DIR)/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) -std=c++20 $< -o $@
 
-.PHONY: clean clean_fast test all
+.PHONY: clean clean_fast test all permissions permissions-sudo install
 clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR)
 
