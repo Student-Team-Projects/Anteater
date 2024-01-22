@@ -13,9 +13,13 @@
 #include "structure/html/html_structure_consumer.hpp"
 #include "structure/structure_provider.hpp"
 
+
 void html_version(int argc, char *argv[]) {
+  const std::filesystem::path home{getenv("HOME")};
+  const std::filesystem::path html_logs_directory = home / ".local/share/debugger/logs/html";
+  structure_provider structure(std::make_unique<html_structure_consumer_root>(html_logs_directory));
+
   bpf_provider provider;
-  structure_provider structure(std::make_unique<html_structure_consumer>());
   provider.run(argv + 1);
   //set uid only for current thread (breaking posix)
   syscall(SYS_setuid, getuid());

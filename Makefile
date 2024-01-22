@@ -21,7 +21,7 @@ TARGET := $(BIN_DIR)/main
 
 all: $(TARGET)
 
-$(TARGET): $(TRACER_SKEL) $(VMLINUX) $(OBJS)
+$(TARGET): $(TRACER_SKEL) $(VMLINUX) $(OBJS) $(SRC_DIR)/main.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) -std=c++20 $(OBJS) $(SRC_DIR)/main.cpp $(INCLUDE_FLAGS) -lbpf -lelf -o $@
 	sudo chown root $(TARGET)

@@ -1,4 +1,4 @@
-#include "plain_event_formatter.hpp"
+#include "structure/plain/plain_event_formatter.hpp"
 
 using namespace events;
 

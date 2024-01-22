@@ -20,7 +20,9 @@ class plain_structure_consumer : public structure_consumer {
     subconsumer(std::filesystem::path filename);
   };
 
+ std::filesystem::path logs_directory;
  public:
+  plain_structure_consumer(std::filesystem::path logs_directory);
   void consume(events::fork_event const&) {}
   std::unique_ptr<structure_consumer> consume(events::exec_event const&);
   void consume(events::exit_event const&) {}

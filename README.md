@@ -1,46 +1,171 @@
 # debugger
 
-- [What is debugger](#introduction)
-  - [Introduction](#introduction)
-  - [Debugger output](#debugger-output)
-  - [Architecture](#architecture)
-  - [Providers](#providers)
-    - [eBPF](#ebpf)
-    - [Sysdig](#sysdig)
-  - [Consumers](#consumers)
-- [How to use debugger](#dependencies)
-  - [Dependencies](#dependencies)
-  - [Compilation and usage](#compilation-and-usage)
-  - [Alias](#alias)
-  - [Run traced programs as other user](#run-traced-program-as-other-user)
-  - [Logs](#logs)
-  - [Help](#help)
-
 ## Introduction
 
-Debugger is a utility program that wraps other programs execution, captures all their outputs from `STDOUT` and `STDERR`, and prints them in human-friendly format using plain text or `html` (default).
+Debugger is a utility program that wraps execution of another program, monitors commands it executes, captures output written to `STDOUT`/`STDERR`, and prints the summary in human-friendly html logs.
+
 
 ## Debugger output
 
-By default, Debugger creates html and js files with logs that are saved in `/var/lib/debugger/`. The root is `index.html` which will be automatically created if no previous Debugger executions have been recorded yet.
+During execution debugger creates html logs in `$HOME/.local/share/debugger/logs/html` directory. Each execution creates a separate directory, however all executions are available in the `index.html` file.
 
-```
-lynx /var/lib/debugger/index.html
-```
+The html is both browser-friendly and lynx-friendly, although some information (e.g. preview of children exit codes) is unavailable in lynx due to lack of javascript support.
 
 ## Architecture
 
-Debugger architecture is base on simple provider-consumer pattern.
+### Event model
 
-## Providers
+There are four kinds of events we monitor:
+- fork
+- write to `STDOUT` or `STDERR`
+- exec
+- exit
 
-Providers are responsible for capturing all interesting events regarding traced processes, like fork, exec, write and exit syscalls.
+Rather than monitoring processes, we are interested in monitoring *programs*.
+A program is created upon `exec`, whereas `fork` creates a new process belonging to the same program.
 
-After capturing an event, it can be consumed by a consumer.
+Similarily to the process tree, we keep track of a program tree where each node represents a group of processes (a subtree in the process tree). When a process emits an event it is logged to the program it belongs to.
 
-Currently there are two different providers implemented and they differ in what utility they use for tracing system events: `eBPF` or `sysdig`.
 
-### eBPF
+#### fork
+The `fork` event is transparent in this model. Its only purpose is to trace the newly created process, which belongs to the same program as the parent.
+
+#### write
+The `write` event is pretty straightforward - the written data is logged to the current group of the process.
+
+#### exec
+The `exec` event creates a new program and hence a new node in our tree.
+This new node represents the source process and all descendant processes which are still in the same group.
+
+
+The interaction between forks and execs may be not trivial, so let's consider some examples.
+
+Let's consider the following sequence of events:
+- process A execs
+- process A writes "a"
+- process A forks, creating process B
+- process B writes "b"
+- process B forks, creating process C
+- process C writes "c"
+
+Process tree:
+```
+A
+|
+B
+|
+C
+```
+
+Program tree:
+```
+[A, B, C]
+```
+
+Logs contain a single page:
+```
+WRITE a
+WRITE b
+WRITE c
+```
+
+Let's consider the following sequence of events:
+- process A execs
+- process A writes "a"
+- process A forks, creating process B
+- process B forks, creating process C
+- process B execs
+- process B writes "b"
+- process C writes "c"
+
+Process tree:
+```
+A
+|
+B
+|
+C
+```
+
+Program tree:
+```
+A
+|
+[B, C]
+```
+
+Logs contain two pages:
+```
+WRITE a
+```
+and
+```
+WRITE b
+WRITE c
+```
+
+Let's consider the following sequence of events:
+- process A execs
+- process A writes "a"
+- process A forks, creating process B
+- process B forks, creating process C
+- process C execs
+- process C writes "c"
+- process B execs
+- process B writes "b"
+
+Process tree:
+```
+A
+|
+B
+|
+C
+```
+
+Program tree:
+```
+  A
+ / \
+C   B   
+```
+
+Logs contain three pages:
+```
+WRITE a
+```
+and
+```
+WRITE b
+```
+and
+```
+WRITE c
+```
+
+
+#### exit
+The `exit` event is logged to all groups that logged all `exec`s of the process.
+
+### Backend
+
+The backend of the debugger consists of:
+- `event.h` and `tracer.bpf.c` which collect and sends the events on the kernel side
+- `bpf_provider` which receives the events on the debugger side, and exposes them to other parts of the program
+
+### Frontend
+
+The frontend consists of:
+- `structure_provider` - which organizes the events from the `bpf_provider` into program tree described in the [Event model](#event-model) section. The structure is then displayed in a concrete format by a `structure_consumer`
+- `structure_consumer` which displays the events in a concrete format. It also acts like an abstract factory by creating children consumers upon consuming an `exec` exec.
+- `structure/html` - `structure_consumer` that outputs logs in html format.
+The `html_event_consumer_root` is used as an entrypoint to the structure. In some sense it represents the debugger itself since the only meaningul event for this class is the very first `exec` created when starting the debugger program.
+The `html_event_consumer` represents a consumer for an actual program.
+
+- `structure/plain` - `structure_consumer` that outputs logs in plain text format
+- `console_logger` - `event_consumer` that simply prints the logs on the `STDOUT`
+
+## eBPF
 
 Events are captured using [eBPF](https://ebpf.io/). Specifically, we used [libbpf](https://github.com/libbpf/libbpf), a C API for `eBPF`.
 
@@ -60,97 +185,31 @@ References and useful links regarding `eBPF` and `libbpf`:
 
 [Linux kernel source code](https://elixir.bootlin.com/linux/latest/source)
 
-### Sysdig
-
-There is a possibility to use [sysdig](https://sysdig.com/) as system events provider, though **it's not recommended**, as `ebpf` proved to be faster and more reliable.
-
-For dynamic event filtering with sysdig, a chisel script `proc_tree.lua` us used. You can learn more about sysdig and chisels in links below.
-
-[sysdig wiki](https://github.com/annulen/sysdig-wiki)
-
-[sysdig github](https://github.com/draios/sysdig)
-
-[examples of chisels](https://github.com/draios/sysdig/tree/dev/userspace/sysdig/chisels)
-
-## Consumers
-
-Consumers are responsible for processing events provided by providers. Currently there are two consumers implemented.
-
-`PlainConsumer` simply prints events to `STDOUT`.
-
-The default consumer is `HtmlConsumer`, which creates structured logs in form of a bunch of html and javascript files. You can find details in [output](#debugger-output) section.
-
 ## Dependencies
 
 On archlinux
 
 ```
-sudo pacman -S bpf sysdig clang compiler-rt llvm llvm-libs spdlog tclap gtest
+sudo pacman -Sy bpf clang compiler-rt llvm llvm-libs spdlog tclap gtest boost
 ```
 
-## Compilation and usage
+## Compilation
 
-To compile run
-
-```bash
-sudo make chisel
+To compile simply run
+```
 make
 ```
 
-To do cleanup run
-
-```bash
-make clean
+To run tests run
+```
+sudo make test
 ```
 
-This creates an executable in `bin`.
+## Usage
 
-Usage from repository base:
+The executable file is `bin/main`.
 
-```bash
-sudo bin/main <cmd> <arg1> <arg2> ...
+To debug a program run
 ```
-
-If you prefer using `sysdig` instead of `bpf`, use `--sysdig` flag (though it's probably not going to be a good decision).
-
-```bash
-sudo bin/main --sysdig <cmd> <arg1> <arg2> ...
-```
-
-## Alias
-
-You can always move the `/bin/main` binary to your `PATH` or add an alias to your `.bashrc` file or similar:
-
-```
-alias debugger='sudo {THIS_REPO_PATH}/bin/main'
-```
-
-And then simply use debugger like this:
-
-```
-debugger [flags] <cmd> <arg1> <arg2>
-```
-
-## Run traced program as other user
-
-To run the program you want to trace as a different user use `--user` flag:
-
-```
-debugger --user <username> ...
-```
-
-## Logs
-
-By default, debugger creates logs from every execution in `/var/log/debugger/logs_{timestamp}.txt`. You can set custom path for output logs file using `--logp` flag:
-
-```
-debugger --logp /path/to/logs/file.txt ...
-```
-
-## Help
-
-You can see help message with
-
-```
-debugger --help
+bin/main <command> [arg]...
 ```

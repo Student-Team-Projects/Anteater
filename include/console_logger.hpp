@@ -1,7 +1,7 @@
 #pragma once
 
 #include "event_consumer.hpp"
-#include "plain_event_formatter.hpp"
+#include "structure/plain/plain_event_formatter.hpp"
 
 class console_logger : public events::event_consumer {
   struct event_visitor {
