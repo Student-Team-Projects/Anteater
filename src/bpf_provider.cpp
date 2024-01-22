@@ -1,153 +1,225 @@
-#include "bpf_provider.h"
+#include "bpf_provider.hpp"
 
-#include <unistd.h>
-#include <bpf/libbpf.h>
-#include <sys/sysinfo.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
+#include <sys/sysinfo.h>
+#include <unistd.h>
+#include <pwd.h>
 
-#include <csignal>
-#include <cstdarg>
-#include <cstdio>
-#include <cstring>
-#include <cstdlib>
-#include <ostream>
-#include <string>
+#include <iostream>
+#include <thread>
+#include <stdexcept>
 
-#include "fmt/format.h"
-#include "spdlog/spdlog.h"
+#include <boost/lockfree/spsc_queue.hpp>
 
-#include "constants.h"
-#include "event.h"
+#include "backend/event.h"
 
-#include "tracer.skel.h"
+void static_init() {
+  static bool called = false;
+  if (called) return;
 
-static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args) {
-    va_list args_cpy;
-    va_copy(args_cpy, args);
-    std::vector<char> buf(1+std::vsnprintf(nullptr, 0, format, args_cpy));
-    va_end(args_cpy);
-    std::vsnprintf(buf.data(), buf.size(), format, args);
-    switch (level) {
-        case LIBBPF_WARN:
-            SPDLOG_WARN(buf.data());
-            return 0;
-        case LIBBPF_DEBUG:
-            SPDLOG_DEBUG(buf.data());
-            return 0;
-        default:
-            SPDLOG_INFO(buf.data());
-    }
-    return 0;
+  if (geteuid())
+    throw std::runtime_error{"This program should be run with sudo privileges"};
+
+  rlimit lim{
+    .rlim_cur = RLIM_INFINITY,
+    .rlim_max = RLIM_INFINITY,
+  };
+
+  if (setrlimit(RLIMIT_MEMLOCK, &lim))
+    throw std::runtime_error{"Failed to increase RLIMIT_MEMLOCK"};
+
+
+  called = true;
 }
 
-BPFProvider::BPFProvider(pid_t root_pid, size_t capacity) : refs(capacity), root_pid(root_pid){
-    /* Set up libbpf errors and debug info callback */
-    libbpf_set_strict_mode(LIBBPF_STRICT_ALL);
-    libbpf_set_print(libbpf_print_fn);
+
+bpf_provider::bpf_provider() : interthread_queue{2048} {
+  static_init();
+
+  skel = tracer::open_and_load();
+  tracer::attach(skel);
+  buffer = ring_buffer__new(bpf_map__fd(skel->maps.queue), buf_process_sample,
+                            this, nullptr);
+};
+
+void bpf_provider::main_loop() {
+  // give thread highest priority.
+  // this ensures that buffers are emptied as frequently as possible.
+  // probably also breaks posix
+  setpriority(PRIO_PROCESS, gettid(), -20);
+
+  while(!tracked_processes.empty() || !messages.empty()) {
+    while (messages.empty() || interthread_queue.write_available() == 0) 
+      ring_buffer__poll(buffer, 100);
+    while(!messages.empty() && interthread_queue.write_available() > 0) {
+      auto message = messages.front();
+      messages.pop();
+      interthread_queue.push(std::move(message));
+    }
+  }
+  active = false;
+  tracer::detach(skel);
+  tracer::destroy(skel);
 }
 
-int handle_event(void *ctx, void *data, size_t data_sz) {
-    BPFProvider *ths = static_cast<BPFProvider *>(ctx);
-    ths->alloc_and_push(static_cast<const Event *>(data), data_sz);
-    return 0;
+
+bpf_provider::~bpf_provider() {
+  receiver_thread.join();
+};
+
+bool bpf_provider::is_active() {
+  return active || interthread_queue.read_available() > 0;
 }
 
-int BPFProvider::start() {
-    int ret = init();
-    if (!ret) ret = listen();
-    return ret;
+std::optional<events::event> bpf_provider::provide() {
+  events::event result;
+  if(interthread_queue.pop(result))
+    return {std::move(result)};
+  else
+    return {};
 }
 
-int BPFProvider::init() {
-    // Load and verify BPF application
-    skel = tracer_bpf__open();
-    if (!skel) {
-        SPDLOG_ERROR("Failed to open and load BPF skeleton\n");
-        return 1;
-    }
-    
-    int err;
-
-    // Parametrize BPF code with boot time as creation time of kernel proc entry
-    struct stat kernel_proc_entry;
-    err = stat("/proc/1", &kernel_proc_entry);
-    if (err) {
-        SPDLOG_ERROR("Failed to fetch last boot time\n");
-        return cleanup(err);
-    }
-    skel->rodata->boot_time = kernel_proc_entry.st_ctim.tv_sec * (uint64_t) 1'000'000'000 + kernel_proc_entry.st_ctim.tv_nsec;
-
-    // create per-cpu auxiliary maps
-    err = bpf_map__set_max_entries(skel->maps.aux_maps, get_nprocs());
-    if (err) {
-        SPDLOG_ERROR("Failed to make per-cpu auxiliary maps\n");
-        return cleanup(err);
-    }
-    
-    // Load and verify BPF programs
-    err = tracer_bpf__load(skel);
-    if (err) {
-        SPDLOG_ERROR("Failed to load and verify BPF skeleton\n");
-        return cleanup(err);
-    }
-
-    // Parametrize BPF code with root process PID
-    err = bpf_map__update_elem(skel->maps.pid_tree, &root_pid, sizeof(pid_t), &root_pid, sizeof(pid_t), BPF_ANY);
-    if (err) {
-        SPDLOG_ERROR("Failed to initialize root pid in BPF program\n");
-        return cleanup(err);
-    }
-
-    // Attach tracepoints
-    err = tracer_bpf__attach(skel);
-    if (err) {
-        SPDLOG_ERROR("Failed to attach BPF skeleton\n");
-        return cleanup(err);
-    }
-
-    // Set up ring buffer polling
-    rb = ring_buffer__new(bpf_map__fd(skel->maps.rb), handle_event, this, NULL);
-    if (!rb) {
-        SPDLOG_ERROR("Failed to create ring buffer\n");
-        return cleanup(-1);
-    }
-    return 0;
+static void fix_user() {
+  setuid(getuid());
 }
 
-int BPFProvider::listen() {
-    // unpause traced program
-    kill(root_pid, SIGUSR1);
-    // Process events
-    while (!exiting) {
-        int err = ring_buffer__poll(rb, 100);
-        // Ctrl-C will cause -EINTR
-        if (err == -EINTR)
-            return cleanup(0);
-        if (err < 0) {
-            SPDLOG_ERROR("Error polling buffer: %d\n", err);
-            return cleanup(err);
-        }
-    }
-    
-    return cleanup(0);
+void bpf_provider::run(char *argv[]) {
+  int stdout_pipe[2];
+  int stderr_pipe[2];
+  if(pipe(stdout_pipe))
+    throw std::runtime_error{"cannot redirect stdout"};
+  
+  pid_t stdout_writer = fork();
+  if(stdout_writer == 0) {
+    fix_user();
+    close(stdout_pipe[1]);
+    dup2(stdout_pipe[0], STDIN_FILENO);
+    execl("/bin/cat", "cat", NULL);
+    exit(-1);
+  }
+
+  if(pipe(stderr_pipe))
+    throw std::runtime_error{"cannot redirect stderr"};
+  pid_t stderr_writer = fork();
+  if(stderr_writer == 0) {
+    fix_user();
+    close(stderr_pipe[1]);
+    dup2(stderr_pipe[0], STDIN_FILENO);
+    execl("/bin/cat", "cat", NULL);
+    std::cout << errno << std::endl;
+    exit(-1);
+  }
+
+  close(stdout_pipe[0]);
+  close(stderr_pipe[0]);
+  dup2(stdout_pipe[1], STDOUT_FILENO);
+  dup2(stderr_pipe[1], STDERR_FILENO);
+
+  pid_t child = fork();
+  int value = 0;
+
+  if (child == 0) {
+    pid_t pid = getpid();
+    bpf_map__update_elem(skel->maps.processes, &pid, sizeof(pid), &value,
+                         sizeof(value), BPF_ANY);
+    fix_user();
+    execvp(argv[0], argv);
+    throw std::runtime_error{"execvp() failed"};
+  } else {
+    tracked_processes.insert(child);
+  }
+
+  active = true;
+  receiver_thread = std::thread {&bpf_provider::main_loop, this};
 }
 
-int BPFProvider::cleanup(int err) {
-    refs.unblock();
-    ring_buffer__free(rb);
-    tracer_bpf__destroy(skel);
+/**
+ * The timestamps returned in events are relative to system boot time.
+ * To return meaningful timestamps we have to get boot time from kernel, which
+ * is done here.
+ */
+std::chrono::system_clock::time_point get_boot_time() {
+  struct stat kernel_proc_entry;
+  int err = stat("/proc/1", &kernel_proc_entry);
+  if (err) throw std::runtime_error("Failed to fetch last boot time");
 
-    return err < 0 ? -err : 0;
+  auto seconds_part = std::chrono::seconds{kernel_proc_entry.st_ctim.tv_sec};
+  auto nanoseconds_part =
+      std::chrono::nanoseconds{kernel_proc_entry.st_ctim.tv_nsec};
+
+  return std::chrono::system_clock::time_point(seconds_part + nanoseconds_part);
 }
 
-void BPFProvider::alloc_and_push(const Event *pt, size_t sz) {
-    Event *pt_cpy = static_cast<Event *>(malloc(sz));
-    if (pt_cpy == nullptr)
-        return;
-    memmove(pt_cpy, pt, sz);
-    refs.push(event_ref(pt_cpy));
+std::chrono::system_clock::time_point into_timestamp(uint64_t event_timestamp) {
+  static auto boot_time = get_boot_time();
+  auto duration_to_event = std::chrono::nanoseconds{event_timestamp};
+  return boot_time + duration_to_event;
 }
 
-Provider::event_ref BPFProvider::provide() {
-    return refs.pop();
+static events::write_event from(const backend::write_event *e) {
+  events::write_event::descriptor fd = e->fd == backend::STDOUT ? 
+    events::write_event::descriptor::STDOUT :
+    events::write_event::descriptor::STDERR;
+
+  return {
+    e->proc,
+    into_timestamp(e->timestamp),
+    fd,
+    {e->data, static_cast<size_t>(e->size)},
+  };
+}
+
+static events::fork_event from(const backend::fork_event *e) {
+  return {
+      e->parent,
+      into_timestamp(e->timestamp),
+      e->child,
+  };
+}
+
+static events::exit_event from(const backend::exit_event *e) {
+  return {e->proc, into_timestamp(e->timestamp), e->code};
+}
+
+static events::exec_event from(const backend::exec_event *e) {
+  std::string command{e->data, e->data + e->args_size};
+  std::replace(command.begin(), command.end(), '\0', ' ');
+  std::string working_directory{e->data + e->args_size, e->data + e->args_size + e->working_directory_size};
+  if(working_directory == "") working_directory = "/";
+  struct passwd *pws = getpwuid(e->uid);
+  std::string user_name{pws->pw_name};
+
+  return {
+    {
+      .source_pid = e->proc,
+      .timestamp = into_timestamp(e->timestamp),
+    },
+    .user_id = 0,
+    .user_name = user_name,
+    .working_directory = working_directory,
+    .command = command,
+  };
+}
+
+int bpf_provider::buf_process_sample(void *ctx, void *data, size_t len) {
+  bpf_provider *me = static_cast<bpf_provider *>(ctx);
+  const backend::event *e = static_cast<backend::event *>(data);
+  switch (e->type) {
+    case backend::FORK:
+      me->tracked_processes.insert(e->fork.child);
+      me->messages.push(from(&(e->fork)));
+      break;
+    case backend::EXIT:
+      me->tracked_processes.erase(e->exit.proc);
+      me->messages.push(from(&(e->exit)));
+      break;
+    case backend::EXEC:
+      me->messages.push(from(&(e->exec)));
+      break;
+    case backend::WRITE:
+      me->messages.push(from(&(e->write)));
+      break;
+  }
+  return 0;
 }
