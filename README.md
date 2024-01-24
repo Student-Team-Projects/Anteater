@@ -1,13 +1,15 @@
-# debugger
+# Anteater
+
+![Logo (beautiful vector graphics anteater)](./anteater.svg)
 
 ## Introduction
 
-Debugger is a utility program that wraps execution of another program, monitors commands it executes, captures output written to `STDOUT`/`STDERR`, and prints the summary in human-friendly html logs.
+Anteater is a utility program that wraps execution of another program, monitors commands it executes, captures output written to `STDOUT`/`STDERR`, and prints the summary in human-friendly html logs.
 
 
-## Debugger output
+## Anteater output
 
-During execution debugger creates html logs in `$HOME/.local/share/debugger/logs/html` directory. Each execution creates a separate directory, however all executions are available in the `index.html` file.
+During execution Anteater creates html logs in `$HOME/.local/share/debugger/logs/html` directory. Each execution creates a separate directory, however all executions are available in the `index.html` file.
 
 The html is both browser-friendly and lynx-friendly, although some information (e.g. preview of children exit codes) is unavailable in lynx due to lack of javascript support.
 
@@ -149,7 +151,7 @@ The `exit` event is logged to all groups that logged all `exec`s of the process.
 
 ### Backend
 
-The backend of the debugger consists of:
+The backend of Anteater consists of:
 - `event.h` and `tracer.bpf.c` which collect and sends the events on the kernel side
 - `bpf_provider` which receives the events on the debugger side, and exposes them to other parts of the program
 
@@ -159,7 +161,7 @@ The frontend consists of:
 - `structure_provider` - which organizes the events from the `bpf_provider` into program tree described in the [Event model](#event-model) section. The structure is then displayed in a concrete format by a `structure_consumer`
 - `structure_consumer` which displays the events in a concrete format. It also acts like an abstract factory by creating children consumers upon consuming an `exec` exec.
 - `structure/html` - `structure_consumer` that outputs logs in html format.
-The `html_event_consumer_root` is used as an entrypoint to the structure. In some sense it represents the debugger itself since the only meaningul event for this class is the very first `exec` created when starting the debugger program.
+The `html_event_consumer_root` is used as an entrypoint to the structure. In some sense it represents the debugger itself since the only meaningul event for this class is the very first `exec` created when starting the Anteater program.
 The `html_event_consumer` represents a consumer for an actual program.
 
 - `structure/plain` - `structure_consumer` that outputs logs in plain text format
