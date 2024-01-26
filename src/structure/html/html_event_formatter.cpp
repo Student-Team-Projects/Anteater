@@ -1,6 +1,7 @@
 #include "structure/html/html_event_formatter.hpp"
 
 #include <regex>
+#include <sstream>
 
 using namespace events;
 
@@ -198,12 +199,20 @@ static std::string remove_ansi_encoding(std::string const& str) {
     return std::regex_replace(str, regex, "");
 }
 
-void html_event_formatter::format(std::ostream& os, write_event const& e) const {
-    std::string style = e.file_descriptor == write_event::descriptor::STDERR ? "style='color: #f5a142;'" : "";
+std::string replace_new_lines_with_br(std::string const& str) {
+    return std::regex_replace(str, std::regex{"\n"}, "<br/>");
+}
 
-    os << "<tr class='event'>"
-        << "<td class='timestamp'>" << round_to_millis(e.timestamp) << "</td>"
-        << "<td><span " << style << ">" << remove_ansi_encoding(e.data) << "</td></span>"
-        << "</tr>";
+void html_event_formatter::format(std::ostream& os, write_event const& e) const {
+    auto timestamp = round_to_millis(e.timestamp);
+    std::string style = e.file_descriptor == write_event::descriptor::STDERR ? "style='color: #f5a142;'" : "";
+    std::stringstream stream(remove_ansi_encoding(e.data));
+    std::string str;
+    while (std::getline(stream, str, '\n')) {
+	    os << "<tr class='event'>"
+		<< "<td class='timestamp'>" << timestamp << "</td>"
+		<< "<td><span " << style << ">" << str << "</td></span>"
+		<< "</tr>";
+    }
     os.flush();
 }
