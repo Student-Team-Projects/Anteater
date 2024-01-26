@@ -6,12 +6,19 @@
 
 Anteater is a utility program that wraps execution of another program, monitors commands it executes, captures output written to `STDOUT`/`STDERR`, and prints the summary in human-friendly html logs.
 
+## Installation
+
+The project is provided on AUR as `anteater`. It can be installed by using `yay -S anteater` or any similar package installer.
 
 ## Anteater output
 
-During execution Anteater creates html logs in `$HOME/.local/share/anteater/logs/html` directory. Each execution creates a separate directory, however all executions are available in the `index.html` file.
+By default anteater produces logs in html format, however, when run with `-L` flag it will only output the logs in text format to standard output without creating any files.
+
+The html logs are located in `$HOME/.local/share/anteater/logs/html` directory. Each execution creates a separate directory, however all executions are available in the `index.html` file.
 
 The html is both browser-friendly and lynx-friendly, although some information (e.g. preview of children exit codes) is unavailable in lynx due to lack of javascript support.
+
+
 
 ## Architecture
 
