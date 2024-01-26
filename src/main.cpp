@@ -1,9 +1,3 @@
-#include <bpf/bpf.h>
-#include <sys/prctl.h>
-#include <sys/resource.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
 #include <exception>
 #include <iostream>
 #include <string>
@@ -13,10 +7,11 @@
 #include "structure/html/html_structure_consumer.hpp"
 #include "structure/structure_provider.hpp"
 
+std::string APP_NAME = "anteater";
 
 void html_version(int argc, char *argv[]) {
   const std::filesystem::path home{getenv("HOME")};
-  const std::filesystem::path html_logs_directory = home / ".local/share/debugger/logs/html";
+  const std::filesystem::path html_logs_directory = home / ".local/share" / APP_NAME / "logs/html";
   structure_provider structure(std::make_unique<html_structure_consumer_root>(html_logs_directory));
 
   bpf_provider provider;

@@ -9,7 +9,7 @@ Anteater is a utility program that wraps execution of another program, monitors 
 
 ## Anteater output
 
-During execution Anteater creates html logs in `$HOME/.local/share/debugger/logs/html` directory. Each execution creates a separate directory, however all executions are available in the `index.html` file.
+During execution Anteater creates html logs in `$HOME/.local/share/anteater/logs/html` directory. Each execution creates a separate directory, however all executions are available in the `index.html` file.
 
 The html is both browser-friendly and lynx-friendly, although some information (e.g. preview of children exit codes) is unavailable in lynx due to lack of javascript support.
 
@@ -153,7 +153,7 @@ The `exit` event is logged to all groups that logged all `exec`s of the process.
 
 The backend of Anteater consists of:
 - `event.h` and `tracer.bpf.c` which collect and sends the events on the kernel side
-- `bpf_provider` which receives the events on the debugger side, and exposes them to other parts of the program
+- `bpf_provider` which receives the events on the anteater side, and exposes them to other parts of the program
 
 ### Frontend
 
@@ -161,7 +161,7 @@ The frontend consists of:
 - `structure_provider` - which organizes the events from the `bpf_provider` into program tree described in the [Event model](#event-model) section. The structure is then displayed in a concrete format by a `structure_consumer`
 - `structure_consumer` which displays the events in a concrete format. It also acts like an abstract factory by creating children consumers upon consuming an `exec` exec.
 - `structure/html` - `structure_consumer` that outputs logs in html format.
-The `html_event_consumer_root` is used as an entrypoint to the structure. In some sense it represents the debugger itself since the only meaningul event for this class is the very first `exec` created when starting the Anteater program.
+The `html_event_consumer_root` is used as an entrypoint to the structure. In some sense it represents the anteater itself since the only meaningul event for this class is the very first `exec` created when starting the Anteater program.
 The `html_event_consumer` represents a consumer for an actual program.
 
 - `structure/plain` - `structure_consumer` that outputs logs in plain text format
@@ -172,8 +172,6 @@ The `html_event_consumer` represents a consumer for an actual program.
 Events are captured using [eBPF](https://ebpf.io/). Specifically, we used [libbpf](https://github.com/libbpf/libbpf), a C API for `eBPF`.
 
 The main idea of `eBPF` is that it allows users to hook their own programs (called BPF porgrams) into a running kernel. These programs are subject to a high number of restrictions to ensure safety.
-
-All the BPF programs are in `src/bpf` as `*.bpf.c` files. They are managed and loaded into the kernel in the appropriate Provider.
 
 References and useful links regarding `eBPF` and `libbpf`:
 
@@ -192,7 +190,7 @@ References and useful links regarding `eBPF` and `libbpf`:
 On archlinux
 
 ```
-sudo pacman -Sy bpf clang compiler-rt llvm llvm-libs spdlog tclap gtest boost
+sudo pacman -Sy bpf clang gtest boost
 ```
 
 ## Compilation

@@ -53,7 +53,9 @@ static void update_index(
   file.close();
 }
 
-html_structure_consumer_root::html_structure_consumer_root(std::filesystem::path logs_directory) : logs_directory(logs_directory) {}
+html_structure_consumer_root::html_structure_consumer_root(std::filesystem::path logs_directory) : logs_directory(logs_directory) {
+  std::cerr << "[html_structure_consumer_root] Saving logs to " << logs_directory.string() << "\n";
+}
 
 std::unique_ptr<structure_consumer> html_structure_consumer_root::consume(events::exec_event const& e) {
   std::string filename = event_to_filename(e);
